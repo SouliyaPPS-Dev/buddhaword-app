@@ -507,10 +507,6 @@ class _MyHomePageState extends State<MyHomePage> {
   //   }
   // }
 
-  void _openLinkBooks() async {
-    context.go('/book');
-  }
-
   // Create a safer filtered list with null safety
   List<String> get safeCategories {
     if (_categories.isEmpty) return [];
@@ -625,10 +621,6 @@ class _MyHomePageState extends State<MyHomePage> {
           IconButton(
             icon: const Icon(Icons.search, color: Colors.white),
             onPressed: () => context.push('/search'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.auto_stories_outlined, color: Colors.white),
-            onPressed: () => _openLinkBooks(),
           ),
           const SizedBox(width: 10),
           IconButton(
