@@ -3,7 +3,9 @@ import java.io.FileInputStream
 
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
-keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
 
 plugins {
     id("com.android.application")
@@ -15,17 +17,17 @@ plugins {
 android {
     namespace = "com.buddha.lao_tipitaka"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
-        // Use Java 11 to avoid obsolete Java 8 warnings and keep plugins consistent
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        // Use Java 17 to avoid obsolete Java 8 warnings and keep plugins consistent
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        // Align Kotlin bytecode target with Java 11
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        // Align Kotlin bytecode target with Java 17
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -41,10 +43,18 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties.getProperty("keyAlias")
-            keyPassword = keystoreProperties.getProperty("keyPassword")
-            storeFile = if (keystoreProperties.containsKey("storeFile")) file(keystoreProperties.getProperty("storeFile")) else null
-            storePassword = keystoreProperties.getProperty("storePassword")
+            if (keystoreProperties.containsKey("keyAlias")) {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+            }
+            if (keystoreProperties.containsKey("keyPassword")) {
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+            if (keystoreProperties.containsKey("storeFile")) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+            }
+            if (keystoreProperties.containsKey("storePassword")) {
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
         }
     }
     
