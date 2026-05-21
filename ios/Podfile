@@ -1,5 +1,5 @@
 # Define the minimum iOS version for the project
-platform :ios, '12.0'
+platform :ios, '13.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -40,9 +40,9 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
 
-    # Enforce iOS 12+ for all pods and use Swift 5 to avoid Swift 6 mode issues.
+    # Enforce iOS 13+ for all pods and use Swift 5 to avoid Swift 6 mode issues.
     target.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
       config.build_settings['SWIFT_VERSION'] = '5.0'
       # Relax concurrency diagnostics that fail under Swift 6 in some pods
       config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
