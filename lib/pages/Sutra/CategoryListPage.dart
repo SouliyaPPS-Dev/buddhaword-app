@@ -7,19 +7,21 @@ import 'package:provider/provider.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../providers/sutra_provider.dart';
+
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
 import 'BookReadingScreenPage.dart';
 import 'DetailPage.dart';
 
 class CategoryListPage extends StatefulWidget {
-  final List<List<dynamic>> data;
+  final List<List<dynamic>>? data;
   final String selectedCategory;
   final String searchTerm;
 
   const CategoryListPage({
     super.key,
-    required this.data,
+    this.data,
     required this.selectedCategory,
     required this.searchTerm,
   });
@@ -49,7 +51,9 @@ class _CategoryListPageState extends State<CategoryListPage> {
   @override
   void initState() {
     super.initState();
-    _filteredData = _filterData(widget.searchTerm);
+    final data =
+        widget.data ?? Provider.of<SutraProvider>(context, listen: false).data;
+    _filteredData = _filterData(widget.searchTerm, data);
     _searchController.text = widget.searchTerm;
   }
 
@@ -189,8 +193,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
     super.dispose();
   }
 
-  List<List<dynamic>> _filterData(String searchTerm) {
-    return widget.data
+  List<List<dynamic>> _filterData(String searchTerm, List<List<dynamic>> data) {
+    return data
         .where(
           (row) =>
               row.length > 4 &&
@@ -352,7 +356,13 @@ class _CategoryListPageState extends State<CategoryListPage> {
                         onPressed: () {
                           setState(() {
                             _searchController.clear();
-                            _filteredData = _filterData('');
+                            final data =
+                                widget.data ??
+                                Provider.of<SutraProvider>(
+                                  context,
+                                  listen: false,
+                                ).data;
+                            _filteredData = _filterData('', data);
                           });
                         },
                       )
@@ -360,7 +370,10 @@ class _CategoryListPageState extends State<CategoryListPage> {
               ),
               onChanged: (value) {
                 setState(() {
-                  _filteredData = _filterData(value);
+                  final data =
+                      widget.data ??
+                      Provider.of<SutraProvider>(context, listen: false).data;
+                  _filteredData = _filterData(value, data);
                 });
               },
             ),
@@ -465,9 +478,14 @@ class _CategoryListPageState extends State<CategoryListPage> {
                                           IconButton(
                                             icon: Icon(Icons.skip_previous),
                                             onPressed: () {
-                                              final previousIndex = _findPreviousValidAudioIndex(index);
+                                              final previousIndex =
+                                                  _findPreviousValidAudioIndex(
+                                                    index,
+                                                  );
                                               if (previousIndex != -1) {
-                                                final previousAudio = _filteredData[previousIndex][5].toString();
+                                                final previousAudio =
+                                                    _filteredData[previousIndex][5]
+                                                        .toString();
                                                 _playPauseAudio(
                                                   previousIndex,
                                                   previousAudio,
@@ -505,9 +523,14 @@ class _CategoryListPageState extends State<CategoryListPage> {
                                           IconButton(
                                             icon: Icon(Icons.skip_next),
                                             onPressed: () {
-                                              final nextIndex = _findNextValidAudioIndex(index);
+                                              final nextIndex =
+                                                  _findNextValidAudioIndex(
+                                                    index,
+                                                  );
                                               if (nextIndex != -1) {
-                                                final nextAudio = _filteredData[nextIndex][5].toString();
+                                                final nextAudio =
+                                                    _filteredData[nextIndex][5]
+                                                        .toString();
                                                 _playPauseAudio(
                                                   nextIndex,
                                                   nextAudio,
@@ -609,7 +632,10 @@ class _CategoryListPageState extends State<CategoryListPage> {
               },
               tooltip: 'ອ່ານປຶ້ມ',
               backgroundColor: Colors.brown,
-                child: const Icon(Icons.auto_stories_outlined, color: Colors.white),
+              child: const Icon(
+                Icons.auto_stories_outlined,
+                color: Colors.white,
+              ),
             )
           : null,
     );

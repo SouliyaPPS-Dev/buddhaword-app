@@ -1,8 +1,8 @@
 name: lao_tipitaka
-description: 'A new Flutter project.'
+description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -43,6 +43,7 @@ dependencies:
   html_editor_enhanced: ^2.7.1
   url_launcher: ^6.3.2
   connectivity_plus: ^7.1.1
+  shared_preferences: ^2.2.2
   flutter_neumorphic: ^3.2.0
 
   flutter_keyboard_visibility: ^6.0.0
@@ -65,13 +66,14 @@ dependencies:
   table_calendar: ^3.0.8
   intl: ^0.20.2
   device_info_plus: ^12.4.0
+  go_router: ^14.0.0
 
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: 'assets/default_image_old.jpg'
-  adaptive_icon_background: '#ffffff'
-  adaptive_icon_foreground: 'assets/default_image_old.jpg'
+  image_path: "assets/default_image_old.jpg"
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/default_image_old.jpg"
   remove_alpha_ios: true
 
 dev_dependencies:

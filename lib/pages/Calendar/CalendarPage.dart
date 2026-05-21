@@ -55,7 +55,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   void _shareCalendar() {
-    final url = 'https://buddhaword.net/calendar';
+    final url = 'https://buddhaword.free.nf/calendar';
     String? title = 'ປະຕິທິນທັມ';
     final shareText = '$title\n $url';
 
@@ -1074,6 +1074,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                                     if (event[0] != null &&
                                                         event[0].isNotEmpty) {
                                                       // Share image and description when event[0] is available
+                                                      final url = 'https://buddhaword.free.nf/calendar';
                                                       Share.share(
                                                         '${event[1]}\n\n Poster: ${event[0]}\n\n ລາຍລະອຽດ: ${event[4]}\n\n' +
                                                             (event[6] != '/'
@@ -1090,7 +1091,8 @@ class _CalendarPageState extends State<CalendarPage> {
                                                                 : '') +
                                                             (event[5] != '/'
                                                                 ? 'Social Page: ${event[5]}\n\n'
-                                                                : ''),
+                                                                : '') +
+                                                            '\nເບິ່ງຕາຕະລາງທັງໝົດ: $url',
                                                       );
                                                     } else {
                                                       // Share only the text description when no image is available

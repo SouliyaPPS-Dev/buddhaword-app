@@ -688,7 +688,7 @@ class _DetailPageState extends State<DetailPage> {
 
   void _shareDetailLink() {
     final shareText =
-        '${widget.title}\n https://buddhaword.net/sutra/details/${widget.id}';
+        '${widget.title}\n https://buddhaword.free.nf/sutra/details/${widget.id}';
     Share.share(shareText, subject: widget.title);
   }
 

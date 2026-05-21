@@ -1,26 +1,46 @@
 // ignore_for_file: library_private_types_in_public_api, use_key_in_widget_constructors, depend_on_referenced_packages, use_build_context_synchronously, unrelated_type_equality_checks, prefer_const_constructors, unnecessary_null_comparison, deprecated_member_use
 
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
+import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'layouts/NavigationDrawer.dart' as custom_nav;
+import 'pages/Books/BooksPage.dart';
+import 'pages/Calendar/CalendarPage.dart';
 import 'pages/Sutra/CategoryListPage.dart';
+import 'pages/Sutra/ContactInfoPage.dart';
 import 'pages/Sutra/DetailPage.dart';
+import 'pages/Sutra/FavoritePage.dart';
 import 'pages/Sutra/RandomImagePage.dart';
+import 'pages/Video/VideoPage.dart';
+import 'providers/books_provider.dart';
+import 'providers/calendar_provider.dart';
+import 'providers/sutra_provider.dart';
+import 'providers/video_provider.dart';
+import 'pages/Video/PlayVideoPage.dart';
 import 'themes/ThemeProvider.dart';
 
+import 'pages/Sutra/SearchPage.dart';
+
 void main() {
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => SutraProvider()),
+        ChangeNotifierProvider(create: (_) => VideoProvider()),
+        ChangeNotifierProvider(create: (_) => CalendarProvider()),
+        ChangeNotifierProvider(create: (_) => BooksProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -28,33 +48,164 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => ThemeProvider(),
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, child) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            title: '',
-            theme: ThemeData(
-              primarySwatch: Colors.brown,
-              fontFamily: 'NotoSerifLao',
-            ),
-            darkTheme: ThemeData(
-              brightness: Brightness.dark,
-              primarySwatch: Colors.brown,
-              fontFamily: 'NotoSerifLao',
-            ),
-            themeMode: themeProvider.isDarkMode
-                ? ThemeMode.dark
-                : ThemeMode.light,
-            initialRoute: '/splash',
-            routes: {
-              '/': (context) => const MyHomePage(title: 'ພຣະສູດ & ສຽງ'),
-              '/splash': (context) => const SplashScreen(),
-            },
-          );
-        },
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    final GoRouter router = GoRouter(
+      initialLocation: '/splash',
+      routes: [
+        GoRoute(
+          path: '/splash',
+          builder: (context, state) => const SplashScreen(),
+        ),
+        GoRoute(
+          path: '/',
+          builder: (context, state) => const MyHomePage(title: 'ພຣະສູດ & ສຽງ'),
+        ),
+        GoRoute(
+          path: '/sutra/details/:id',
+          builder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return Consumer<SutraProvider>(
+              builder: (context, sutraProvider, child) {
+                if (sutraProvider.data.isEmpty) {
+                  if (!sutraProvider.isLoading) {
+                    Future.microtask(() => sutraProvider.fetchData());
+                  }
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final sutra = sutraProvider.getSutraById(id);
+                if (sutra == null) {
+                  return const Scaffold(
+                    body: Center(child: Text('Sutra not found')),
+                  );
+                }
+                return DetailPage(
+                  id: sutra[0].toString(),
+                  title: sutra[1].toString(),
+                  details: sutra[3].toString(),
+                  category: sutra[4].toString(),
+                  audio: sutra[5].toString(),
+                  searchTerm: '',
+                  onFavoriteChanged: () {},
+                );
+              },
+            );
+          },
+        ),
+        GoRoute(
+          path: '/sutra/:category',
+          builder: (context, state) {
+            final category = state.pathParameters['category']!;
+            return Consumer<SutraProvider>(
+              builder: (context, sutraProvider, child) {
+                if (sutraProvider.data.isEmpty) {
+                  if (!sutraProvider.isLoading) {
+                    Future.microtask(() => sutraProvider.fetchData());
+                  }
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                return CategoryListPage(
+                  selectedCategory: category,
+                  searchTerm: '',
+                );
+              },
+            );
+          },
+        ),
+        GoRoute(path: '/book', builder: (context, state) => BooksPage()),
+        GoRoute(
+          path: '/video',
+          builder: (context, state) => VideoPage(title: 'ວີດີໂອ Video'),
+        ),
+        GoRoute(
+          path: '/video/view/:id',
+          builder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return Consumer<VideoProvider>(
+              builder: (context, videoProvider, child) {
+                if (videoProvider.data.isEmpty) {
+                  if (!videoProvider.isLoading) {
+                    Future.microtask(() => videoProvider.fetchData());
+                  }
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final video = videoProvider.getVideoById(id);
+                if (video == null) {
+                  return const Scaffold(
+                    body: Center(child: Text('Video not found')),
+                  );
+                }
+                return PlayVideoPage(
+                  id: video[0].toString(),
+                  title: video[1].toString(),
+                  details: video[2].toString(),
+                  category: video[3].toString(),
+                  link: video[4].toString(),
+                );
+              },
+            );
+          },
+        ),
+        GoRoute(
+          path: '/book/view/:id',
+          builder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return Consumer<BooksProvider>(
+              builder: (context, booksProvider, child) {
+                if (booksProvider.data.isEmpty) {
+                  if (!booksProvider.isLoading) {
+                    Future.microtask(() => booksProvider.fetchData());
+                  }
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final book = booksProvider.getBookById(id);
+                if (book != null) {
+                  final link = book.length > 4 ? book[4].toString() : '';
+                  if (link.isNotEmpty) {
+                    Future.microtask(() => launch(link));
+                  }
+                }
+                return BooksPage();
+              },
+            );
+          },
+        ),
+        GoRoute(path: '/calendar', builder: (context, state) => CalendarPage()),
+        GoRoute(
+          path: '/calendar/view/:id',
+          builder: (context, state) => CalendarPage(),
+        ),
+        GoRoute(
+          path: '/favorites',
+          builder: (context, state) => FavoritePage(),
+        ),
+        GoRoute(
+          path: '/contact',
+          builder: (context, state) => ContactInfoPage(),
+        ),
+        GoRoute(path: '/search', builder: (context, state) => SearchPage()),
+      ],
+    );
+
+    return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
+      title: 'Buddhaword',
+      theme: ThemeData(primarySwatch: Colors.brown, fontFamily: 'NotoSerifLao'),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        primarySwatch: Colors.brown,
+        fontFamily: 'NotoSerifLao',
       ),
+      themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      routerConfig: router,
     );
   }
 }
@@ -73,7 +224,7 @@ class _SplashScreenState extends State<SplashScreen> {
     // Delay then navigate to home
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed('/');
+      context.go('/');
     });
   }
 
@@ -146,7 +297,6 @@ class _MyHomePageState extends State<MyHomePage> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
-  List<List<dynamic>> _data = [];
   List<String> _categories = [];
   List<List<dynamic>> _filteredData = [];
   String _searchTerm = '';
@@ -173,159 +323,16 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    if (title == 'ພຣະສູດ & ສຽງ') {
-      fetchData(_searchTerm);
-    } else {
-      fetchDataFromAPI(_searchTerm);
-    }
+    Provider.of<SutraProvider>(context, listen: false).fetchData();
   }
 
-  int _findNextValidAudioIndex(int currentIndex) {
-    for (int i = currentIndex + 1; i < _filteredData.length; i++) {
-      final audio = _filteredData[i][5].toString();
-      if (audio.isNotEmpty && audio != '/') {
-        return i;
-      }
-    }
-    return -1; // No next valid audio
-  }
-
-  int _findPreviousValidAudioIndex(int currentIndex) {
-    for (int i = currentIndex - 1; i >= 0; i--) {
-      final audio = _filteredData[i][5].toString();
-      if (audio.isNotEmpty && audio != '/') {
-        return i;
-      }
-    }
-    return -1; // No previous valid audio
-  }
-
-  Future<void> fetchDataFromAPI(String searchTerm) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-
-    String? cachedData = prefs.getString('cachedData');
-
-    bool hasInternet =
-        await Connectivity().checkConnectivity() != ConnectivityResult.none;
-
-    if (!hasInternet) {
-      if (cachedData != null && cachedData.isNotEmpty) {
-        final List<dynamic> cachedValues = json.decode(cachedData);
-        _data = cachedValues.cast<List<dynamic>>();
-
-        // Update data with cached values
-        updateData(searchTerm); // Update data here
-      }
-    }
-
-    try {
-      final response = await http.get(
-        Uri.parse(
-          'https://sheets.googleapis.com/v4/spreadsheets/1mKtgmZ_Is4e6P3P5lvOwIplqx7VQ3amicgienGN9zwA/values/Sheet1!1:1000000?key=AIzaSyDFjIl-SEHUsgK0sjMm7x0awpf8tTEPQjs',
-        ),
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> jsonResponse = json.decode(response.body);
-        final List<dynamic> sheetValues =
-            jsonResponse['values'] as List<dynamic>;
-
-        final List<List<dynamic>> values = sheetValues
-            .skip(1)
-            .map((row) => List<dynamic>.from(row))
-            .toList();
-
-        _data = values;
-        prefs.setString('cachedData', json.encode(_data));
-
-        // Update data with fetched values
-        updateData(searchTerm); // Update data here
-      } else {
-        if (kDebugMode) {
-          print('Failed to load data: ${response.statusCode}');
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error fetching data: $e');
-      }
-    }
-  }
-
-  Future<void> fetchData(String searchTerm) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? cachedData = prefs.getString('cachedData');
-
-    bool hasInternet =
-        await Connectivity().checkConnectivity() != ConnectivityResult.none;
-
-    if (!hasInternet) {
-      if (cachedData != null && cachedData.isNotEmpty) {
-        final List<dynamic> cachedValues = json.decode(cachedData);
-        _data = cachedValues.cast<List<dynamic>>();
-
-        // Update data with cached values
-        updateData(searchTerm); // Update data here
-      }
-    }
-
-    if (cachedData == null || cachedData.isEmpty) {
-      try {
-        final response = await http.get(
-          Uri.parse(
-            'https://sheets.googleapis.com/v4/spreadsheets/1mKtgmZ_Is4e6P3P5lvOwIplqx7VQ3amicgienGN9zwA/values/Sheet1!1:1000000?key=AIzaSyDFjIl-SEHUsgK0sjMm7x0awpf8tTEPQjs',
-          ),
-        );
-
-        if (response.statusCode == 200) {
-          final Map<String, dynamic> jsonResponse = json.decode(response.body);
-          final List<dynamic> sheetValues =
-              jsonResponse['values'] as List<dynamic>;
-
-          final List<List<dynamic>> values = sheetValues
-              .skip(1)
-              .map((row) => List<dynamic>.from(row))
-              .toList();
-
-          _data = values;
-          prefs.setString('cachedData', json.encode(_data));
-
-          // Update data with fetched values
-          updateData(searchTerm); // Update data here
-        } else {
-          if (kDebugMode) {
-            print('Failed to load data: ${response.statusCode}');
-          }
-        }
-      } catch (e) {
-        // If no internet, load data from cache
-        if (cachedData != null && cachedData.isNotEmpty) {
-          final List<dynamic> cachedValues = json.decode(cachedData);
-          _data = cachedValues.cast<List<dynamic>>();
-
-          // Update data with cached values
-          updateData(searchTerm); // Update data here
-        }
-      }
-    } else {
-      // If no internet, load data from cache
-      if (cachedData.isNotEmpty) {
-        final List<dynamic> cachedValues = json.decode(cachedData);
-        _data = cachedValues.cast<List<dynamic>>();
-
-        // Update data with cached values
-        updateData(searchTerm); // Update data here
-      }
-    }
-  }
-
-  void updateData(String searchTerm) {
-    _categories = _data
+  void updateData(String searchTerm, List<List<dynamic>> data) {
+    _categories = data
         .map((row) => row.length > 4 ? row[4].toString() : '')
         .toSet()
         .toList();
 
-    _filteredData = _data
+    _filteredData = data
         .where((row) {
           return row.any(
             (cell) => cell.toString().toLowerCase().contains(
@@ -441,6 +448,32 @@ class _MyHomePageState extends State<MyHomePage> {
     return '$twoDigitMinutes:$twoDigitSeconds';
   }
 
+  int _findNextValidAudioIndex(int currentIndex) {
+    for (int i = currentIndex + 1; i < _filteredData.length; i++) {
+      final audio = _filteredData[i][5].toString();
+      if (audio.isNotEmpty && audio != '/') {
+        return i;
+      }
+    }
+    return -1; // No next valid audio
+  }
+
+  int _findPreviousValidAudioIndex(int currentIndex) {
+    for (int i = currentIndex - 1; i >= 0; i--) {
+      final audio = _filteredData[i][5].toString();
+      if (audio.isNotEmpty && audio != '/') {
+        return i;
+      }
+    }
+    return -1; // No previous valid audio
+  }
+
+  Future<void> fetchDataFromAPI(String searchTerm) async {
+    final sutraProvider = Provider.of<SutraProvider>(context, listen: false);
+    await sutraProvider.fetchData(searchTerm: searchTerm);
+    updateData(searchTerm, sutraProvider.data);
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -460,26 +493,22 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // void _openLinkVideo() async {
   //   if (await canLaunch('https://buddhaword.free.nf/video')) {
-  //     await launch('https://buddhaword.net/video');
+  //     await launch('https://buddhaword.free.nf/video');
   //   } else {
   //     throw 'Could not launch';
   //   }
   // }
 
   // void _openLinkCalendar() async {
-  //   if (await canLaunch('https://buddhaword.net/calendar')) {
-  //     await launch('https://buddhaword.net/calendar');
+  //   if (await canLaunch('https://buddhaword.free.nf/calendar')) {
+  //     await launch('https://buddhaword.free.nf/calendar');
   //   } else {
   //     throw 'Could not launch';
   //   }
   // }
 
   void _openLinkBooks() async {
-    if (await canLaunch('https://buddhaword.net/book')) {
-      await launch('https://buddhaword.net/book');
-    } else {
-      throw 'Could not launch';
-    }
+    context.go('/book');
   }
 
   // Create a safer filtered list with null safety
@@ -594,6 +623,10 @@ class _MyHomePageState extends State<MyHomePage> {
           // ),
           // const SizedBox(width: 10),
           IconButton(
+            icon: const Icon(Icons.search, color: Colors.white),
+            onPressed: () => context.push('/search'),
+          ),
+          IconButton(
             icon: const Icon(Icons.auto_stories_outlined, color: Colors.white),
             onPressed: () => _openLinkBooks(),
           ),
@@ -645,433 +678,422 @@ class _MyHomePageState extends State<MyHomePage> {
         ],
       ),
       drawer: const custom_nav.NavigationDrawer(),
-      body: _data.isEmpty
-          ? RandomImagePage()
-          : Padding(
-              padding: const EdgeInsets.all(1.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: _searchController,
-                    style: const TextStyle(fontSize: 17.0),
-                    decoration: InputDecoration(
-                      hintText: 'ຄົ້ນຫາພຣະສູດ...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                setState(() {
-                                  _searchController.clear();
-                                  _searchTerm = '';
-                                  updateData(
-                                    _searchTerm,
-                                  ); // Update data directly
-                                });
-                              },
-                            )
-                          : null,
+      body: Consumer<SutraProvider>(
+        builder: (context, sutraProvider, child) {
+          if (sutraProvider.isLoading && sutraProvider.data.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (sutraProvider.data.isEmpty) {
+            return RandomImagePage();
+          }
+
+          // Use provider data
+          _categories = sutraProvider.categories;
+
+          // Re-filter if search term is active
+          if (_searchTerm.isNotEmpty) {
+            _filteredData = sutraProvider.data
+                .where((row) {
+                  return row.any(
+                    (cell) => cell.toString().toLowerCase().contains(
+                      _searchTerm.toLowerCase(),
                     ),
-                    onChanged: (value) {
-                      setState(() {
-                        _searchTerm = value;
-                        updateData(
-                          _searchTerm,
-                        ); // Update data when search term changes
-                      });
-                    },
+                  );
+                })
+                .where((row) => row.isNotEmpty && row[0] != '0')
+                .toList()
+                .reversed
+                .toList();
+          }
+
+          return Padding(
+            padding: const EdgeInsets.all(1.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _searchController,
+                  style: const TextStyle(fontSize: 17.0),
+                  decoration: InputDecoration(
+                    hintText: 'ຄົ້ນຫາພຣະສູດ...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              setState(() {
+                                _searchController.clear();
+                                _searchTerm = '';
+                              });
+                            },
+                          )
+                        : null,
                   ),
-                  const SizedBox(height: 2),
-                  Expanded(
-                    child: _searchTerm.isEmpty
-                        ? GridView.builder(
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  mainAxisSpacing: 1.0,
-                                  crossAxisSpacing: 1.0,
-                                  childAspectRatio: aspectRatio,
+                  onChanged: (value) {
+                    setState(() {
+                      _searchTerm = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 2),
+                Expanded(
+                  child: _searchTerm.isEmpty
+                      ? GridView.builder(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: crossAxisCount,
+                                mainAxisSpacing: 1.0,
+                                crossAxisSpacing: 1.0,
+                                childAspectRatio: aspectRatio,
+                              ),
+                          itemCount: _categories.length,
+                          itemBuilder: (context, index) {
+                            final category = _categories[index];
+                            final imageAsset = 'assets/$category.jpg';
+                            return GestureDetector(
+                              onTap: () {
+                                context.push('/sutra/$category');
+                              },
+                              child: Card(
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                            itemCount: safeCategories.length,
-                            itemBuilder: (context, index) {
-                              final category = safeCategories[index];
-                              final imageAsset = 'assets/$category.jpg';
-                              return GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => CategoryListPage(
-                                        data: _data,
-                                        selectedCategory: category,
-                                        searchTerm: _searchTerm,
+                                child: AspectRatio(
+                                  aspectRatio: aspectRatio,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              const BorderRadius.vertical(
+                                                top: Radius.circular(2),
+                                              ),
+                                          child: AspectRatio(
+                                            aspectRatio: aspectRatio,
+                                            child: FutureBuilder<bool>(
+                                              future: _checkAssetExists(
+                                                imageAsset,
+                                              ),
+                                              builder: (context, snapshot) {
+                                                if (snapshot.connectionState ==
+                                                    ConnectionState.waiting) {
+                                                  // Loading state
+                                                  return const Center(
+                                                    child:
+                                                        CircularProgressIndicator(),
+                                                  );
+                                                } else if (snapshot.hasData &&
+                                                    snapshot.data!) {
+                                                  // Asset exists, load it
+                                                  return Image.asset(
+                                                    imageAsset,
+                                                    fit: BoxFit.cover,
+                                                    width: double.infinity,
+                                                    height: cardHeight,
+                                                  );
+                                                } else {
+                                                  // Asset doesn't exist, load default image
+                                                  return Image.asset(
+                                                    'assets/default_image_old.jpg',
+                                                    fit: BoxFit.cover,
+                                                    width: double.infinity,
+                                                    height: cardHeight,
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
-                                child: Card(
-                                  elevation: 2,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                                      const SizedBox(height: 1),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 2,
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Expanded(
+                                              child: Container(
+                                                alignment: Alignment.center,
+                                                child: Text(
+                                                  category,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.bold,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  child: AspectRatio(
-                                    aspectRatio: aspectRatio,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : ListView.builder(
+                          itemCount: _filteredData.length,
+                          itemBuilder: (context, index) {
+                            final rowData = _filteredData[index];
+                            final id = rowData[0].toString();
+                            final title = rowData[1].toString();
+                            final audio = rowData[5].toString();
+
+                            return Card(
+                              elevation: 8,
+                              margin: EdgeInsets.symmetric(
+                                vertical: 8,
+                                horizontal: 16,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15.0),
+                              ),
+                              shadowColor: Color.fromARGB(
+                                255,
+                                91,
+                                50,
+                                35,
+                              ).withOpacity(0.9),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(15.0),
+                                ),
+                                child: ListTile(
+                                  title: Padding(
+                                    padding: const EdgeInsets.only(top: 1.5),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Expanded(
-                                          child: ClipRRect(
-                                            borderRadius:
-                                                const BorderRadius.vertical(
-                                                  top: Radius.circular(2),
+                                          child: RichText(
+                                            text: highlightSearchTerm(
+                                              context,
+                                              title,
+                                              _searchTerm,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        if (audio != '/')
+                                          CircleAvatar(
+                                            radius: 22,
+                                            backgroundColor: Colors.transparent,
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    Colors.brown.shade600,
+                                                    Colors.brown.shade600,
+                                                    Colors.brown.shade600,
+                                                  ],
+                                                  begin: Alignment.topLeft,
+                                                  end: Alignment.bottomRight,
                                                 ),
-                                            child: AspectRatio(
-                                              aspectRatio: aspectRatio,
-                                              child: FutureBuilder<bool>(
-                                                future: _checkAssetExists(
-                                                  imageAsset,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: IconButton(
+                                                icon: Icon(
+                                                  _currentlyPlayingIndex ==
+                                                              index &&
+                                                          _isPlaying
+                                                      ? Icons.pause
+                                                      : Icons.play_arrow,
+                                                  color: Colors.white,
                                                 ),
-                                                builder: (context, snapshot) {
-                                                  if (_filteredData.isEmpty) {
-                                                    // Loading state
-                                                    return const Center(
-                                                      child:
-                                                          CircularProgressIndicator(),
-                                                    );
-                                                  } else if (snapshot.hasData &&
-                                                      snapshot.data!) {
-                                                    // Asset exists, load it
-                                                    return Image.asset(
-                                                      imageAsset,
-                                                      fit: BoxFit.cover,
-                                                      width: double.infinity,
-                                                      height: cardHeight,
-                                                    );
-                                                  } else {
-                                                    // Asset doesn't exist, load default image
-                                                    return Image.asset(
-                                                      'assets/default_image_old.jpg',
-                                                      fit: BoxFit.cover,
-                                                      width: double.infinity,
-                                                      height: cardHeight,
-                                                    );
-                                                  }
+                                                iconSize: 20,
+                                                onPressed: () async {
+                                                  await _playPauseAudio(
+                                                    index,
+                                                    audio,
+                                                  );
                                                 },
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 1),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 2,
-                                          ),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.center,
-                                            children: [
-                                              Expanded(
-                                                child: Container(
-                                                  alignment: Alignment.center,
-                                                  child: Text(
-                                                    category,
-                                                    style: const TextStyle(
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      letterSpacing: 0.5,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
                                       ],
                                     ),
                                   ),
-                                ),
-                              );
-                            },
-                          )
-                        : ListView.builder(
-                            itemCount: _filteredData.length,
-                            itemBuilder: (context, index) {
-                              final rowData = _filteredData[index];
-                              final id = rowData[0].toString();
-                              final title = rowData[1].toString();
-                              final detailLink = rowData[3].toString();
-                              final category = rowData[4].toString();
-                              final audio = rowData[5].toString();
 
-                              return Card(
-                                elevation: 8,
-                                margin: EdgeInsets.symmetric(
-                                  vertical: 8,
-                                  horizontal: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(15.0),
-                                ),
-                                shadowColor: Color.fromARGB(
-                                  255,
-                                  91,
-                                  50,
-                                  35,
-                                ).withOpacity(0.9),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(15.0),
-                                  ),
-                                  child: ListTile(
-                                    title: Padding(
-                                      padding: const EdgeInsets.only(top: 1.5),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Expanded(
-                                            child: RichText(
-                                              text: highlightSearchTerm(
-                                                context,
-                                                title,
-                                                _searchTerm,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          if (audio != '/')
-                                            CircleAvatar(
-                                              radius: 22,
-                                              backgroundColor:
-                                                  Colors.transparent,
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    colors: [
-                                                      Colors.brown.shade600,
-                                                      Colors.brown.shade600,
-                                                      Colors.brown.shade600,
+                                  subtitle: audio != '/'
+                                      ? Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            if (_currentlyPlayingIndex == index)
+                                              Column(
+                                                children: [
+                                                  Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                    children: [
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          Icons.skip_previous,
+                                                        ),
+                                                        onPressed: () {
+                                                          final previousIndex =
+                                                              _findPreviousValidAudioIndex(
+                                                                index,
+                                                              );
+                                                          if (previousIndex !=
+                                                              -1) {
+                                                            final previousAudio =
+                                                                _filteredData[previousIndex][5]
+                                                                    .toString();
+                                                            _playPauseAudio(
+                                                              previousIndex,
+                                                              previousAudio,
+                                                            );
+                                                          }
+                                                        },
+                                                      ),
+                                                      Expanded(
+                                                        child: Slider(
+                                                          min: 0.0,
+                                                          max: _duration
+                                                              .inMilliseconds
+                                                              .toDouble(),
+                                                          value: _position
+                                                              .inMilliseconds
+                                                              .toDouble()
+                                                              .clamp(
+                                                                0.0,
+                                                                _duration
+                                                                    .inMilliseconds
+                                                                    .toDouble(),
+                                                              ),
+                                                          onChanged: (value) {
+                                                            _seek(
+                                                              Duration(
+                                                                milliseconds: value
+                                                                    .toInt()
+                                                                    .clamp(
+                                                                      0,
+                                                                      _duration
+                                                                          .inMilliseconds,
+                                                                    ),
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          Icons.skip_next,
+                                                        ),
+                                                        onPressed: () {
+                                                          final nextIndex =
+                                                              _findNextValidAudioIndex(
+                                                                index,
+                                                              );
+                                                          if (nextIndex != -1) {
+                                                            final nextAudio =
+                                                                _filteredData[nextIndex][5]
+                                                                    .toString();
+                                                            _playPauseAudio(
+                                                              nextIndex,
+                                                              nextAudio,
+                                                            );
+                                                          }
+                                                        },
+                                                      ),
+                                                      SizedBox(width: 0),
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          _isRepeating
+                                                              ? Icons.repeat_one
+                                                              : Icons.repeat,
+                                                        ),
+                                                        color: Colors
+                                                            .brown, // Icon color
+                                                        iconSize: 25,
+                                                        onPressed: () {
+                                                          setState(() {
+                                                            _isRepeating =
+                                                                !_isRepeating;
+                                                            _player.setLoopMode(
+                                                              _isRepeating
+                                                                  ? LoopMode.one
+                                                                  : LoopMode
+                                                                        .off,
+                                                            );
+                                                          });
+                                                        },
+                                                      ),
+                                                      SizedBox(width: 0),
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          Icons.download,
+                                                        ),
+                                                        color: Colors
+                                                            .brown, // Icon color
+                                                        iconSize: 25,
+                                                        onPressed: () {
+                                                          _downloadAudio(audio);
+                                                        },
+                                                      ),
                                                     ],
-                                                    begin: Alignment.topLeft,
-                                                    end: Alignment.bottomRight,
                                                   ),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: IconButton(
-                                                  icon: Icon(
-                                                    _currentlyPlayingIndex ==
-                                                                index &&
-                                                            _isPlaying
-                                                        ? Icons.pause
-                                                        : Icons.play_arrow,
-                                                    color: Colors.white,
-                                                  ),
-                                                  iconSize: 20,
-                                                  onPressed: () async {
-                                                    await _playPauseAudio(
-                                                      index,
-                                                      audio,
-                                                    );
-                                                  },
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    subtitle: audio != '/'
-                                        ? Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              if (_currentlyPlayingIndex ==
-                                                  index)
-                                                Column(
-                                                  children: [
-                                                    Row(
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 14.0,
+                                                        ),
+                                                    child: Row(
                                                       mainAxisAlignment:
                                                           MainAxisAlignment
                                                               .spaceBetween,
                                                       children: [
-                                                        IconButton(
-                                                          icon: Icon(
-                                                            Icons.skip_previous,
-                                                          ),
-                                                          onPressed: () {
-                                                            final previousIndex =
-                                                                _findPreviousValidAudioIndex(
-                                                                  index,
-                                                                );
-                                                            if (previousIndex !=
-                                                                -1) {
-                                                              final previousAudio =
-                                                                  _filteredData[previousIndex][5]
-                                                                      .toString();
-                                                              _playPauseAudio(
-                                                                previousIndex,
-                                                                previousAudio,
-                                                              );
-                                                            }
-                                                          },
-                                                        ),
-                                                        Expanded(
-                                                          child: Slider(
-                                                            min: 0.0,
-                                                            max: _duration
-                                                                .inMilliseconds
-                                                                .toDouble(),
-                                                            value: _position
-                                                                .inMilliseconds
-                                                                .toDouble()
-                                                                .clamp(
-                                                                  0.0,
-                                                                  _duration
-                                                                      .inMilliseconds
-                                                                      .toDouble(),
-                                                                ),
-                                                            onChanged: (value) {
-                                                              _seek(
-                                                                Duration(
-                                                                  milliseconds: value
-                                                                      .toInt()
-                                                                      .clamp(
-                                                                        0,
-                                                                        _duration
-                                                                            .inMilliseconds,
-                                                                      ),
-                                                                ),
-                                                              );
-                                                            },
+                                                        Text(
+                                                          _formatDuration(
+                                                            _position,
                                                           ),
                                                         ),
-                                                        IconButton(
-                                                          icon: Icon(
-                                                            Icons.skip_next,
+                                                        Text(
+                                                          _formatDuration(
+                                                            _duration -
+                                                                _position,
                                                           ),
-                                                          onPressed: () {
-                                                            final nextIndex =
-                                                                _findNextValidAudioIndex(
-                                                                  index,
-                                                                );
-                                                            if (nextIndex !=
-                                                                -1) {
-                                                              final nextAudio =
-                                                                  _filteredData[nextIndex][5]
-                                                                      .toString();
-                                                              _playPauseAudio(
-                                                                nextIndex,
-                                                                nextAudio,
-                                                              );
-                                                            }
-                                                          },
-                                                        ),
-                                                        SizedBox(width: 0),
-                                                        IconButton(
-                                                          icon: Icon(
-                                                            _isRepeating
-                                                                ? Icons
-                                                                      .repeat_one
-                                                                : Icons.repeat,
-                                                          ),
-                                                          color: Colors
-                                                              .brown, // Icon color
-                                                          iconSize: 25,
-                                                          onPressed: () {
-                                                            setState(() {
-                                                              _isRepeating =
-                                                                  !_isRepeating;
-                                                              _player.setLoopMode(
-                                                                _isRepeating
-                                                                    ? LoopMode
-                                                                          .one
-                                                                    : LoopMode
-                                                                          .off,
-                                                              );
-                                                            });
-                                                          },
-                                                        ),
-                                                        SizedBox(width: 0),
-                                                        IconButton(
-                                                          icon: Icon(
-                                                            Icons.download,
-                                                          ),
-                                                          color: Colors
-                                                              .brown, // Icon color
-                                                          iconSize: 25,
-                                                          onPressed: () {
-                                                            _downloadAudio(
-                                                              audio,
-                                                            );
-                                                          },
                                                         ),
                                                       ],
                                                     ),
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 14.0,
-                                                          ),
-                                                      child: Row(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .spaceBetween,
-                                                        children: [
-                                                          Text(
-                                                            _formatDuration(
-                                                              _position,
-                                                            ),
-                                                          ),
-                                                          Text(
-                                                            _formatDuration(
-                                                              _duration -
-                                                                  _position,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                            ],
-                                          )
-                                        : null,
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => DetailPage(
-                                            id: id,
-                                            title: title,
-                                            details: detailLink,
-                                            category: category,
-                                            audio: audio,
-                                            searchTerm: _searchTerm,
-                                            onFavoriteChanged: () {
-                                              fetchData(_searchTerm);
-                                            },
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                                  ),
+                                                ],
+                                              ),
+                                          ],
+                                        )
+                                      : null,
+                                  onTap: () {
+                                    context.push('/sutra/details/$id');
+                                  },
                                 ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
+          );
+        },
+      ),
     );
   }
 

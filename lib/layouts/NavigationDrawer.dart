@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -67,26 +68,26 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
   }
 
   void _openLinkVideo() async {
-    if (await canLaunch('https://buddhaword.net/video')) {
-      await launch('https://buddhaword.net/video');
+    if (await canLaunch('https://buddhaword.free.nf/video')) {
+      await launch('https://buddhaword.free.nf/video');
     } else {
-      throw 'Could not launch';
+      throw 'Could not launch https://buddhaword.free.nf/video';
     }
   }
 
   void _openLinkCalendar() async {
-    if (await canLaunch('https://buddhaword.net/calendar')) {
-      await launch('https://buddhaword.net/calendar');
+    if (await canLaunch('https://buddhaword.free.nf/calendar')) {
+      await launch('https://buddhaword.free.nf/calendar');
     } else {
-      throw 'Could not launch';
+      throw 'Could not launch https://buddhaword.free.nf/calendar';
     }
   }
 
   void _openLinkBooks() async {
-    if (await canLaunch('https://buddhaword.net/book')) {
-      await launch('https://buddhaword.net/book');
+    if (await canLaunch('https://buddhaword.free.nf/book')) {
+      await launch('https://buddhaword.free.nf/book');
     } else {
-      throw 'Could not launch';
+      throw 'Could not launch https://buddhaword.free.nf/book';
     }
   }
 
@@ -630,13 +631,7 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
               letterSpacing: 0.5,
             ),
           ),
-          onTap: () => {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => MyHomePage(title: 'ພຣະສູດ & ສຽງ'),
-              ),
-            ),
-          },
+          onTap: () => {context.push('/')},
         ),
         SizedBox(height: 8),
         ListTile(
@@ -652,11 +647,7 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
               letterSpacing: 0.5,
             ),
           ),
-          onTap: () => {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => FavoritePage()),
-            ),
-          },
+          onTap: () => {context.push('/favorites')},
         ),
         SizedBox(height: 8),
         ListTile(
@@ -800,11 +791,7 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
               letterSpacing: 0.5,
             ),
           ),
-          onTap: () => {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => ContactInfoPage()),
-            ),
-          },
+          onTap: () => {context.push('/contact')},
         ),
         SizedBox(height: 8),
         ListTile(

@@ -494,13 +494,7 @@ class _PlayVideoPageState extends State<PlayVideoPage> {
   }
 
   void _shareVideoLink() {
-    final url =
-        'https://buddha-nature.web.app/#/playVideo/$_videoID?videoLinks=${Uri.encodeComponent(_videoLink!)}';
-
-    String? title = _data.firstWhere(
-      (row) => row.isNotEmpty && row[0] == widget.id,
-      orElse: () => [],
-    )[1];
+    final url = 'https://buddhaword.free.nf/video/view/$_videoID';
 
     final shareText = '$_videoTitle\n $url';
 

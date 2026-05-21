@@ -3,7 +3,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import '../../main.dart';
+import 'package:go_router/go_router.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:async';
 
@@ -28,11 +28,7 @@ class _RandomImagePageState extends State<RandomImagePage> {
     ) {
       if (results.contains(ConnectivityResult.none)) {
         // No internet connection, navigate to MyHomePage
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => MyHomePage(title: 'ພຣະສູດ & ສຽງ'),
-          ),
-        );
+        context.go('/');
       }
     });
   }
