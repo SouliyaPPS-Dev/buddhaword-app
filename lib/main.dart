@@ -105,9 +105,7 @@ class _SplashScreenState extends State<SplashScreen> {
               children: [
                 // Container width ~92vw like the CSS example
                 ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: screenWidth * 0.92,
-                  ),
+                  constraints: BoxConstraints(maxWidth: screenWidth * 0.92),
                   child: Wrap(
                     alignment: WrapAlignment.center,
                     spacing: 12,
@@ -461,7 +459,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   // void _openLinkVideo() async {
-  //   if (await canLaunch('https://buddhaword.net/video')) {
+  //   if (await canLaunch('https://buddhaword.free.nf/video')) {
   //     await launch('https://buddhaword.net/video');
   //   } else {
   //     throw 'Could not launch';
@@ -583,8 +581,7 @@ class _MyHomePageState extends State<MyHomePage> {
             },
           ),
         ),
-        title: Image.asset('assets/buddha_nature_logo.png', height: 36,
-        ),
+        title: Image.asset('assets/buddha_nature_logo.png', height: 36),
         actions: [
           // IconButton(
           //   icon: const Icon(Icons.calendar_month, color: Colors.white),
@@ -911,9 +908,15 @@ class _MyHomePageState extends State<MyHomePage> {
                                                             Icons.skip_previous,
                                                           ),
                                                           onPressed: () {
-                                                            final previousIndex = _findPreviousValidAudioIndex(index);
-                                                            if (previousIndex != -1) {
-                                                              final previousAudio = _filteredData[previousIndex][5].toString();
+                                                            final previousIndex =
+                                                                _findPreviousValidAudioIndex(
+                                                                  index,
+                                                                );
+                                                            if (previousIndex !=
+                                                                -1) {
+                                                              final previousAudio =
+                                                                  _filteredData[previousIndex][5]
+                                                                      .toString();
                                                               _playPauseAudio(
                                                                 previousIndex,
                                                                 previousAudio,
@@ -956,9 +959,15 @@ class _MyHomePageState extends State<MyHomePage> {
                                                             Icons.skip_next,
                                                           ),
                                                           onPressed: () {
-                                                            final nextIndex = _findNextValidAudioIndex(index);
-                                                            if (nextIndex != -1) {
-                                                              final nextAudio = _filteredData[nextIndex][5].toString();
+                                                            final nextIndex =
+                                                                _findNextValidAudioIndex(
+                                                                  index,
+                                                                );
+                                                            if (nextIndex !=
+                                                                -1) {
+                                                              final nextAudio =
+                                                                  _filteredData[nextIndex][5]
+                                                                      .toString();
                                                               _playPauseAudio(
                                                                 nextIndex,
                                                                 nextAudio,
