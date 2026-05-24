@@ -383,12 +383,8 @@ class _CategoryListPageState extends State<CategoryListPage> {
               itemCount: _filteredData.length,
               itemBuilder: (context, index) {
                 final rowData = _filteredData[index];
-                final id = rowData[0].toString();
                 final title = rowData[1]
                     .toString(); // Assuming the first column contains the title
-                final detailLink = rowData[3]
-                    .toString(); // Assuming the second column contains the detail link
-                final category = rowData[4].toString();
                 final audio = rowData[5].toString();
 
                 return Card(
@@ -597,11 +593,18 @@ class _CategoryListPageState extends State<CategoryListPage> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => DetailPage(
-                              id: id,
-                              title: title,
-                              details: detailLink,
-                              category: category,
-                              audio: audio,
+                              items: _filteredData
+                                  .map(
+                                    (e) => {
+                                      'id': e[0],
+                                      'title': e[1],
+                                      'details': e[3],
+                                      'category': e[4],
+                                      'audio': e[5],
+                                    },
+                                  )
+                                  .toList(),
+                              initialIndex: index,
                               searchTerm: _searchController.text,
                               onFavoriteChanged: () => setState(() {}),
                             ),

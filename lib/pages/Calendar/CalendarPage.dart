@@ -32,8 +32,7 @@ class _CalendarPageState extends State<CalendarPage> {
   List<List<dynamic>> _data = [];
   List<String> imageUrls = [];
 
-  bool hasInternet =
-      Connectivity().checkConnectivity() != ConnectivityResult.none;
+  bool hasInternet = true;
 
   Map<DateTime, List<dynamic>> events = {};
   DateTime _focusedDay = DateTime.now();
@@ -145,7 +144,7 @@ class _CalendarPageState extends State<CalendarPage> {
     final storage = await getFromSharedPreferences('slideLocalData');
 
     bool hasInternet =
-        await Connectivity().checkConnectivity() != ConnectivityResult.none;
+        !(await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
 
     try {
       if (hasInternet) {

@@ -30,8 +30,7 @@ class _BooksPageState extends State<BooksPage> {
   String _searchTerm = '';
   String _selectedCategory = ''; // Define _selectedCategory
 
-  bool hasInternet =
-      Connectivity().checkConnectivity() != ConnectivityResult.none;
+  bool hasInternet = true;
 
   @override
   void initState() {
@@ -79,7 +78,7 @@ class _BooksPageState extends State<BooksPage> {
 
   Future<void> fetchDataFromAPI(String searchTerm) async {
     bool hasInternet =
-        await Connectivity().checkConnectivity() != ConnectivityResult.none;
+        !(await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
 
     try {
       if (hasInternet) {
@@ -145,7 +144,7 @@ class _BooksPageState extends State<BooksPage> {
 
   Future<void> fetchDataOffline(String searchTerm) async {
     bool hasInternet =
-        await Connectivity().checkConnectivity() != ConnectivityResult.none;
+        !(await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
 
     final cachedDataLocal = await getFromSharedPreferences('booksLocalData');
 

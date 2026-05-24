@@ -483,10 +483,7 @@ class _SearchPageState extends State<SearchPage> {
                 itemCount: _filteredData.length,
                 itemBuilder: (context, index) {
                   final rowData = _filteredData[index];
-                  final id = rowData[0].toString();
                   final title = rowData[1].toString();
-                  final detailLink = rowData[3].toString();
-                  final category = rowData[4].toString();
                   final audio = rowData[5].toString();
 
                   return Card(
@@ -581,9 +578,14 @@ class _SearchPageState extends State<SearchPage> {
                                             IconButton(
                                               icon: Icon(Icons.skip_previous),
                                               onPressed: () {
-                                                final previousIndex = _findPreviousValidAudioIndex(index);
+                                                final previousIndex =
+                                                    _findPreviousValidAudioIndex(
+                                                      index,
+                                                    );
                                                 if (previousIndex != -1) {
-                                                  final previousAudio = _filteredData[previousIndex][5].toString();
+                                                  final previousAudio =
+                                                      _filteredData[previousIndex][5]
+                                                          .toString();
                                                   _playPauseAudio(
                                                     previousIndex,
                                                     previousAudio,
@@ -621,9 +623,14 @@ class _SearchPageState extends State<SearchPage> {
                                             IconButton(
                                               icon: Icon(Icons.skip_next),
                                               onPressed: () {
-                                                final nextIndex = _findNextValidAudioIndex(index);
+                                                final nextIndex =
+                                                    _findNextValidAudioIndex(
+                                                      index,
+                                                    );
                                                 if (nextIndex != -1) {
-                                                  final nextAudio = _filteredData[nextIndex][5].toString();
+                                                  final nextAudio =
+                                                      _filteredData[nextIndex][5]
+                                                          .toString();
                                                   _playPauseAudio(
                                                     nextIndex,
                                                     nextAudio,
@@ -693,11 +700,18 @@ class _SearchPageState extends State<SearchPage> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => DetailPage(
-                                  id: id,
-                                  title: title,
-                                  details: detailLink,
-                                  category: category,
-                                  audio: audio,
+                                  items: _filteredData
+                                      .map(
+                                        (e) => {
+                                          'id': e[0],
+                                          'title': e[1],
+                                          'details': e[3],
+                                          'category': e[4],
+                                          'audio': e[5],
+                                        },
+                                      )
+                                      .toList(),
+                                  initialIndex: index,
                                   searchTerm: _searchTerm,
                                   onFavoriteChanged: () {
                                     fetchData(_searchTerm);

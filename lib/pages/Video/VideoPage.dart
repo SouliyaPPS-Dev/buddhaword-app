@@ -40,8 +40,7 @@ class _VideoPageState extends State<VideoPage> {
   List<List<dynamic>> _filteredData = [];
   String _searchTerm = '';
 
-  bool hasInternet =
-      Connectivity().checkConnectivity() != ConnectivityResult.none;
+  bool hasInternet = false;
 
   Map<int, List<YoutubePlayerController>> _controllers = {};
 
@@ -135,7 +134,7 @@ class _VideoPageState extends State<VideoPage> {
 
   void checkConnectivity() async {
     var connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult != ConnectivityResult.none) {
+    if (!connectivityResult.contains(ConnectivityResult.none)) {
       hasInternet = true;
     } else {
       hasInternet = false;
@@ -426,7 +425,7 @@ class _VideoPageState extends State<VideoPage> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
     bool hasInternet =
-        await Connectivity().checkConnectivity() != ConnectivityResult.none;
+        ! (await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
 
     try {
       if (hasInternet) {
@@ -469,7 +468,7 @@ class _VideoPageState extends State<VideoPage> {
     String? cachedData = prefs.getString('videoLocalData');
 
     bool hasInternet =
-        await Connectivity().checkConnectivity() != ConnectivityResult.none;
+        ! (await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
 
     if (!hasInternet || title == '' || title.isEmpty) {
       if (cachedData != null && cachedData.isNotEmpty) {

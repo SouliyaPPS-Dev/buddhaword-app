@@ -105,10 +105,6 @@ class _FavoritePageState extends State<FavoritePage> {
     });
   }
 
-  void _onFavoriteChanged() {
-    _loadFavorites();
-  }
-
   Future<void> _deleteAllFavorites() async {
     await showDialog(
       context: context,
@@ -510,10 +506,7 @@ class _FavoritePageState extends State<FavoritePage> {
                         final item = _filteredFavorites[index];
                         // Assuming each item is a JSON string, parse it
                         final itemData = jsonDecode(item);
-                        final id = itemData['id'];
                         final title = itemData['title'];
-                        final detailLink = itemData['details'];
-                        final category = itemData['category'];
                         final audio = itemData['audio'];
 
                         return Card(
@@ -619,11 +612,15 @@ class _FavoritePageState extends State<FavoritePage> {
                                                       Icons.skip_previous,
                                                     ),
                                                     onPressed: () {
-                                                      final previousIndex = _findPreviousValidAudioIndex(index);
+                                                      final previousIndex =
+                                                          _findPreviousValidAudioIndex(
+                                                            index,
+                                                          );
                                                       if (previousIndex != -1) {
-                                                        final previousAudio = jsonDecode(
-                                                          _filteredFavorites[previousIndex],
-                                                        )['audio'].toString();
+                                                        final previousAudio =
+                                                            jsonDecode(
+                                                              _filteredFavorites[previousIndex],
+                                                            )['audio'].toString();
                                                         _playPauseAudio(
                                                           previousIndex,
                                                           previousAudio,
@@ -664,7 +661,10 @@ class _FavoritePageState extends State<FavoritePage> {
                                                   IconButton(
                                                     icon: Icon(Icons.skip_next),
                                                     onPressed: () {
-                                                      final nextIndex = _findNextValidAudioIndex(index);
+                                                      final nextIndex =
+                                                          _findNextValidAudioIndex(
+                                                            index,
+                                                          );
                                                       if (nextIndex != -1) {
                                                         final nextAudio = jsonDecode(
                                                           _filteredFavorites[nextIndex],
@@ -743,13 +743,16 @@ class _FavoritePageState extends State<FavoritePage> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => DetailPage(
-                                      id: id,
-                                      title: title,
-                                      details: detailLink,
-                                      category: category,
-                                      audio: audio,
+                                      items: _filteredFavorites
+                                          .map(
+                                            (e) =>
+                                                json.decode(e)
+                                                    as Map<String, dynamic>,
+                                          )
+                                          .toList(),
+                                      initialIndex: index,
                                       searchTerm: _searchTerm,
-                                      onFavoriteChanged: _onFavoriteChanged,
+                                      onFavoriteChanged: _loadFavorites,
                                     ),
                                   ),
                                 );
@@ -787,7 +790,7 @@ class _FavoritePageState extends State<FavoritePage> {
                 );
               },
               tooltip: 'ອ່ານປຶ້ມ',
-             backgroundColor: Colors.brown,
+              backgroundColor: Colors.brown,
               child: const Icon(
                 Icons.auto_stories_outlined,
                 color: Colors.white,

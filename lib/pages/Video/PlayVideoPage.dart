@@ -200,7 +200,7 @@ class _PlayVideoPageState extends State<PlayVideoPage> {
   Future<void> _checkConnectivity() async {
     var result = await Connectivity().checkConnectivity();
     setState(() {
-      hasInternet = result != ConnectivityResult.none;
+      hasInternet = !result.contains(ConnectivityResult.none);
     });
   }
 

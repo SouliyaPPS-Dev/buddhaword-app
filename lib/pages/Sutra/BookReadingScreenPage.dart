@@ -58,8 +58,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
   StreamSubscription<Duration?>? _durationSubscription;
   StreamSubscription<Duration>? _positionSubscription;
 
-  bool hasInternet =
-      Connectivity().checkConnectivity() != ConnectivityResult.none;
+  bool hasInternet = false;
 
   // check if the current theme is dark or not
   bool? isDarkMode;
@@ -75,9 +74,6 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
 
     _currentPageIndex = widget.initialPageIndex;
     _pageController = PageController(initialPage: widget.initialPageIndex);
-    _pageController.addListener(() {
-      _onPageChanged(_pageController.page!.toInt());
-    });
 
     _checkInternetConnectivity();
   }
@@ -123,7 +119,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
   Future<void> _checkInternetConnectivity() async {
     var connectivityResult = await Connectivity().checkConnectivity();
     setState(() {
-      hasInternet = connectivityResult != ConnectivityResult.none;
+      hasInternet = !connectivityResult.contains(ConnectivityResult.none);
     });
     if (hasInternet && getCurrentAudio() != '/') {
       _initAudioPlayer();
@@ -358,16 +354,19 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
     });
   }
 
-  Future<String> _fetchData(String url) async {
+  Future<String> _fetchData(String detail) async {
+    if (!detail.startsWith('http')) {
+      return detail;
+    }
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse(detail));
       if (response.statusCode == 200) {
         return response.body;
       } else {
-        return '';
+        return 'Error: Failed to load content (Status: ${response.statusCode})';
       }
     } catch (e) {
-      return '';
+      return 'Error: $e';
     }
   }
 
@@ -618,7 +617,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
                                                   onPressed: () {
                                                     if (index > 0) {
                                                       final previousAudio = widget
-                                                          .filteredData[_currentPageIndex -
+                                                          .filteredData[index -
                                                               1][5]
                                                           .toString();
                                                       _playPauseAudio(
@@ -677,39 +676,38 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
                                                     },
                                                   ),
                                                 ),
-                                              if (_isPlaying &&
-                                                  _position > Duration.zero &&
-                                                  getCurrentAudio() != '/' &&
-                                                  hasInternet)
-                                                IconButton(
-                                                  icon: Icon(Icons.skip_next),
-                                                  onPressed: () {
-                                                    if (index <
-                                                        detailLink.length - 1) {
-                                                      final nextAudio = widget
-                                                          .filteredData[_currentPageIndex +
-                                                              1][5]
-                                                          .toString();
-                                                      _playPauseAudio(
-                                                        index + 1,
-                                                        nextAudio,
-                                                      ).then(
-                                                        (value) => {
-                                                          // next pageview
-                                                          _pageController.nextPage(
-                                                            duration:
-                                                                const Duration(
-                                                                  milliseconds:
-                                                                      500,
-                                                                ),
-                                                            curve: Curves
-                                                                .easeInOut,
-                                                          ),
-                                                        },
-                                                      );
-                                                    }
-                                                  },
-                                                ),
+                                              IconButton(
+                                                icon: Icon(Icons.skip_next),
+                                                onPressed: () {
+                                                  if (index <
+                                                      widget
+                                                              .filteredData
+                                                              .length -
+                                                          1) {
+                                                    final nextAudio = widget
+                                                        .filteredData[index +
+                                                            1][5]
+                                                        .toString();
+                                                    _playPauseAudio(
+                                                      index + 1,
+                                                      nextAudio,
+                                                    ).then(
+                                                      (value) => {
+                                                        // next pageview
+                                                        _pageController.nextPage(
+                                                          duration:
+                                                              const Duration(
+                                                                milliseconds:
+                                                                    500,
+                                                              ),
+                                                          curve:
+                                                              Curves.easeInOut,
+                                                        ),
+                                                      },
+                                                    );
+                                                  }
+                                                },
+                                              ),
                                             ],
                                           ),
                                           if (_isPlaying &&
@@ -786,8 +784,9 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
                                         TextSpan(
                                           children: parseContent(
                                             context,
-                                            detailLink,
+                                            snapshot.data!,
                                             _fontSize,
+                                            isDarkMode == true,
                                           ),
                                         ),
                                         toolbarOptions: const ToolbarOptions(
@@ -907,15 +906,18 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
   }
 
   Future<void> _copyContentToClipboard() async {
-    String detailText = widget.filteredData[_currentPageIndex][3].toString();
-    String cleanedText = detailText.replaceAll(
+    String detailUrl = widget.filteredData[_currentPageIndex][3].toString();
+    String content = await _fetchData(detailUrl);
+    String cleanedText = content.replaceAll(
       RegExp(r'<\/?b>'),
       '',
     ); // Remove <b> and </b> tags
     Clipboard.setData(ClipboardData(text: cleanedText));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Content copied to clipboard')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Content copied to clipboard')),
+      );
+    }
   }
 
   Future<void> _loadFontSizeFromSharedPreferences() async {

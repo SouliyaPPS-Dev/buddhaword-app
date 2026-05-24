@@ -1,7 +1,6 @@
 // ignore_for_file: library_private_types_in_public_api, use_key_in_widget_constructors, depend_on_referenced_packages, use_build_context_synchronously, unrelated_type_equality_checks, prefer_const_constructors, unnecessary_null_comparison, deprecated_member_use
 
 import 'dart:async';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -82,11 +81,20 @@ class MyApp extends StatelessWidget {
                   );
                 }
                 return DetailPage(
-                  id: sutra[0].toString(),
-                  title: sutra[1].toString(),
-                  details: sutra[3].toString(),
-                  category: sutra[4].toString(),
-                  audio: sutra[5].toString(),
+                  items: sutraProvider.data
+                      .map(
+                        (e) => {
+                          'id': e[0],
+                          'title': e[1],
+                          'details': e[3],
+                          'category': e[4],
+                          'audio': e[5],
+                        },
+                      )
+                      .toList(),
+                  initialIndex: sutraProvider.data.indexWhere(
+                    (e) => e[0].toString() == id,
+                  ),
                   searchTerm: '',
                   onFavoriteChanged: () {},
                 );
@@ -303,8 +311,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   String get title => widget.title;
 
-  bool hasInternet =
-      Connectivity().checkConnectivity() != ConnectivityResult.none;
+  bool hasInternet = true;
 
   int? _currentlyPlayingIndex;
   bool _isPlaying = false;

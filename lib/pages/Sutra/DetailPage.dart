@@ -16,58 +16,60 @@ import '../../themes/ThemeProvider.dart';
 import 'SearchPage.dart';
 
 class DetailPage extends StatefulWidget {
-  final String id;
-  final String title;
-  final String details;
-  final String category;
-  final String audio;
-  final String searchTerm; // ✅ Add searchTerm
-  final VoidCallback onFavoriteChanged; // Add this line
+  final List<Map<String, dynamic>> items;
+  final int initialIndex;
+  final String searchTerm;
+  final VoidCallback onFavoriteChanged;
+
   const DetailPage({
-    required this.id,
-    required this.title,
-    required this.details,
-    required this.category,
-    required this.audio,
+    required this.items,
+    required this.initialIndex,
     required this.searchTerm,
-    required this.onFavoriteChanged, // Add this line
+    required this.onFavoriteChanged,
   });
+
   @override
   _DetailPageState createState() => _DetailPageState();
 }
 
 class _DetailPageState extends State<DetailPage> {
+  late PageController _pageController;
+  late int _currentIndex;
   double _fontSize = 18.0;
-  double get fontSize => _fontSize;
-  bool _isFavorited = false; // Add this line
+  bool _isFavorited = false;
   final AudioPlayer _player = AudioPlayer();
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
-  // Add the repeat functionality
   bool _isRepeating = false;
+
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
   StreamSubscription<Duration>? _positionSubscription;
-  bool hasInternet =
-      Connectivity().checkConnectivity() != ConnectivityResult.none;
-  // check if the current theme is dark or not
+
+  bool hasInternet = false;
   bool? isDarkMode;
-  Timer? _themeCheckTimer;
+
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+    _checkConnectivity();
     _loadFavoriteState();
     _loadFontSizeFromSharedPreferences();
-    if (hasInternet && widget.audio != '/') {
-      _initializePlayer();
-    }
+    _initializePlayer();
   }
 
-  // Remove redundant theme-checking timer, instead rely on Theme changes directly via the provider
+  void _checkConnectivity() async {
+    var result = await Connectivity().checkConnectivity();
+    setState(() {
+      hasInternet = !result.contains(ConnectivityResult.none);
+    });
+  }
+
   @override
   void didChangeDependencies() {
-    // Track theme changes based on the current provider
     final themeProvider = Provider.of<ThemeProvider>(context);
     if (themeProvider.isDarkMode != isDarkMode) {
       setState(() {
@@ -79,28 +81,39 @@ class _DetailPageState extends State<DetailPage> {
 
   void _initializePlayer() async {
     try {
-      await _player.setUrl(widget.audio);
-      _playerStateSubscription = _player.playerStateStream.listen((
-        playerState,
-      ) {
-        setState(() {
-          _isPlaying = playerState.playing;
+      await _player.stop();
+      String audioUrl = widget.items[_currentIndex]['audio'] ?? '/';
+      if (audioUrl != '/' && hasInternet) {
+        await _player.setUrl(audioUrl);
+        _playerStateSubscription?.cancel();
+        _playerStateSubscription = _player.playerStateStream.listen((
+          playerState,
+        ) {
+          if (mounted) {
+            setState(() {
+              _isPlaying = playerState.playing;
+            });
+          }
         });
-      });
-      _durationSubscription = _player.durationStream.listen((duration) {
-        setState(() {
-          _duration = duration ?? Duration.zero;
+        _durationSubscription?.cancel();
+        _durationSubscription = _player.durationStream.listen((duration) {
+          if (mounted) {
+            setState(() {
+              _duration = duration ?? Duration.zero;
+            });
+          }
         });
-      });
-      _positionSubscription = _player.positionStream.listen((position) {
-        setState(() {
-          _position = position;
+        _positionSubscription?.cancel();
+        _positionSubscription = _player.positionStream.listen((position) {
+          if (mounted) {
+            setState(() {
+              _position = position;
+            });
+          }
         });
-      });
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error initializing audio player: $e');
       }
+    } catch (e) {
+      if (kDebugMode) print('Error initializing audio player: $e');
     }
   }
 
@@ -110,14 +123,12 @@ class _DetailPageState extends State<DetailPage> {
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();
-    _themeCheckTimer?.cancel();
+    _pageController.dispose();
     super.dispose();
   }
 
   void _disposeAudioPlayer() {
-    // clear state playing audio
     _player.stop();
-    // Cancel subscriptions here to avoid LateInitializationError
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();
@@ -129,98 +140,75 @@ class _DetailPageState extends State<DetailPage> {
     } else {
       await _player.play();
     }
-    if (mounted) {
-      setState(() {
-        _isPlaying = !_isPlaying;
-      });
-    }
   }
 
   String formatTime(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final hours = twoDigits(duration.inHours);
     final minutes = twoDigits(duration.inMinutes.remainder(60));
     final seconds = twoDigits(duration.inSeconds.remainder(60));
-    return [if (duration.inHours > 0) hours, minutes, seconds].join(':');
+    return [
+      if (duration.inHours > 0) twoDigits(duration.inHours),
+      minutes,
+      seconds,
+    ].join(':');
   }
 
   void _downloadAudio(String urlAudio) async {
     if (await canLaunch(urlAudio)) {
       await launch(urlAudio);
-    } else {
-      throw 'Could not launch $urlAudio';
     }
   }
 
   Future<void> _loadFavoriteState() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      // Check if the current detail is in favorites
-      List<String>? currentFavorites = prefs.getStringList('favorites');
-      if (currentFavorites != null) {
-        _isFavorited = currentFavorites.any((item) {
-          Map<String, dynamic> current = json.decode(item);
-          return current['id'] == widget.id &&
-              current['title'] == widget.title &&
-              current['details'] == widget.details &&
-              current['category'] == widget.category &&
-              current['audio'] == widget.audio;
+    final item = widget.items[_currentIndex];
+    List<String>? currentFavorites = prefs.getStringList('favorites');
+    if (currentFavorites != null) {
+      setState(() {
+        _isFavorited = currentFavorites.any((fav) {
+          Map<String, dynamic> current = json.decode(fav);
+          return current['id'] == item['id'] &&
+              current['title'] == item['title'];
         });
-      } else {
-        _isFavorited = false;
-        // Initialize the favorites list
-        prefs.setStringList('favorites', []);
-        // Initialize the favorite state for the current detail
-        prefs.setBool(
-          '${widget.id}_${widget.title}_${widget.details}_${widget.category}_${widget.audio}',
-          false,
-        );
-        // Notify the parent widget
-        widget.onFavoriteChanged();
-        // Load the favorite state again
-        _loadFavoriteState();
-        // Return to avoid calling the setState method
-        return;
-      }
-    });
+      });
+    }
   }
 
   Future<void> _toggleFavorite() async {
     final prefs = await SharedPreferences.getInstance();
+    final item = widget.items[_currentIndex];
     setState(() {
       _isFavorited = !_isFavorited;
-      prefs.setBool(
-        '${widget.id}_${widget.title}_${widget.details}_${widget.category}_${widget.audio}',
-        _isFavorited,
-      );
       List<String> currentFavorites = prefs.getStringList('favorites') ?? [];
       if (_isFavorited) {
-        currentFavorites.add(
-          json.encode({
-            'id': widget.id,
-            'title': widget.title,
-            'details': widget.details,
-            'category': widget.category,
-            'audio': widget.audio,
-          }),
-        );
+        currentFavorites.add(json.encode(item));
       } else {
-        currentFavorites.removeWhere((item) {
-          Map<String, dynamic> current = json.decode(item);
-          return current['id'] == widget.id &&
-              current['title'] == widget.title &&
-              current['details'] == widget.details &&
-              current['category'] == widget.category &&
-              current['audio'] == widget.audio;
+        currentFavorites.removeWhere((fav) {
+          Map<String, dynamic> current = json.decode(fav);
+          return current['id'] == item['id'] &&
+              current['title'] == item['title'];
         });
       }
       prefs.setStringList('favorites', currentFavorites);
-      widget.onFavoriteChanged(); // Notify the parent widget
+      widget.onFavoriteChanged();
     });
+  }
+
+  void _onPageChanged(int index) {
+    setState(() {
+      _currentIndex = index;
+      _isPlaying = false;
+      _position = Duration.zero;
+      _duration = Duration.zero;
+    });
+    _loadFavoriteState();
+    _initializePlayer();
   }
 
   @override
   Widget build(BuildContext context) {
+    final currentItem = widget.items[_currentIndex];
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.brown,
@@ -229,9 +217,8 @@ class _DetailPageState extends State<DetailPage> {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
             color: Colors.white,
-          ), // Adjust the font size as needed
+          ),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
@@ -248,7 +235,6 @@ class _DetailPageState extends State<DetailPage> {
             ),
             onPressed: _toggleFavorite,
           ),
-          const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.search, color: Colors.white),
             onPressed: () {
@@ -259,487 +245,384 @@ class _DetailPageState extends State<DetailPage> {
               );
             },
           ),
-          const SizedBox(width: 4),
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.menu_open, color: Colors.white),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
+              onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
-          const SizedBox(width: 15),
-          // Add a switch to toggle dark mode
           Consumer<ThemeProvider>(
             builder: (context, themeProvider, child) {
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      themeProvider.toggleTheme(!themeProvider.isDarkMode);
-                    },
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Text(
-                          themeProvider.isDarkMode ? "☀️" : "🌙",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              return IconButton(
+                icon: Text(
+                  themeProvider.isDarkMode ? "☀️" : "🌙",
+                  style: TextStyle(fontSize: 16),
+                ),
+                onPressed: () =>
+                    themeProvider.toggleTheme(!themeProvider.isDarkMode),
               );
             },
           ),
-          const SizedBox(width: 15),
+          const SizedBox(width: 10),
         ],
       ),
       drawer: const custom_nav.NavigationDrawer(),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Container(
-          constraints: BoxConstraints(
-            minHeight: MediaQuery.of(context).size.height,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.items.length,
+            onPageChanged: _onPageChanged,
+            itemBuilder: (context, index) {
+              final item = widget.items[index];
+              return _buildPageContent(item);
+            },
           ),
-          padding: const EdgeInsets.all(8.0),
-          // Set the background color based on the theme
-          color: isDarkMode == true
-              ? Colors
-                    .black // Dark theme background color
-              : Color.fromRGBO(
-                  246,
-                  238,
-                  217,
-                  1.0,
-                ), // Light theme background color (or any other color you prefer)
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: SelectableText(
-                  widget.title,
-                  textAlign: TextAlign.center,
-                  toolbarOptions: const ToolbarOptions(
-                    copy: true,
-                    cut: true,
-                    paste: true,
-                    selectAll: true,
+          // Navigation Buttons Overlay
+          if (_currentIndex > 0)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton(
+                  icon: Icon(
+                    Icons.arrow_back_ios_new,
+                    color: Colors.brown.withOpacity(0.5),
+                    size: 30,
                   ),
-                  showCursor: true,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
+                  onPressed: () => _pageController.previousPage(
+                    duration: Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
-              const Divider(color: Colors.black, thickness: 1, height: 1),
-              const SizedBox(height: 10),
-              // Add buttons to control audio playback
-              if (widget.audio != '/' && hasInternet)
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final bool isMobile = constraints.maxWidth < 600;
-                    final double paddingValue = isMobile
-                        ? 8.0 // Smaller padding for mobile devices
-                        : constraints.maxWidth *
-                              0.1; // 10% of the width as padding for larger screens
-                    return Center(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minWidth: isMobile
-                              ? constraints.maxWidth
-                              : constraints.maxWidth * 0.8,
-                          maxWidth: constraints.maxWidth,
-                        ),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 0 : paddingValue,
-                          ), // Add horizontal padding to center the text
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: <Widget>[
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  IconButton(
-                                    icon: Icon(
-                                      _isRepeating
-                                          ? Icons.repeat_one
-                                          : Icons.repeat,
-                                    ),
-                                    color: Colors.brown, // Icon color
-                                    iconSize: 25,
-                                    onPressed: () {
-                                      setState(() {
-                                        _isRepeating = !_isRepeating;
-                                        _player.setLoopMode(
-                                          _isRepeating
-                                              ? LoopMode.one
-                                              : LoopMode.off,
-                                        );
-                                      });
-                                    },
-                                  ),
-                                  SizedBox(width: 10),
-                                  CircleAvatar(
-                                    radius:
-                                        22, // Smaller radius for a smaller button
-                                    backgroundColor: Colors
-                                        .transparent, // Transparent background for CircleAvatar
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Colors.brown.shade600,
-                                            Colors.brown.shade600,
-                                            Colors.brown.shade600,
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: IconButton(
-                                        icon: Icon(
-                                          _isPlaying
-                                              ? Icons.pause
-                                              : Icons.play_arrow,
-                                        ),
-                                        color: Colors.white, // Icon color
-                                        iconSize: 25,
-                                        onPressed: _playPauseAudio,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 10),
-                                  IconButton(
-                                    icon: Icon(Icons.download),
-                                    color: Colors.brown, // Icon color
-                                    iconSize: 25,
-                                    onPressed: () {
-                                      _downloadAudio(widget.audio);
-                                    },
-                                  ),
-                                ],
-                              ),
-                              if (_isPlaying || _position > Duration.zero)
-                                Slider(
-                                  min: 0.0,
-                                  max: _duration.inSeconds.toDouble(),
-                                  value: _position.inSeconds.toDouble(),
-                                  onChanged: (value) async {
-                                    final position = Duration(
-                                      seconds: value.toInt(),
-                                    );
-                                    await _player.seek(position);
-                                    setState(() {
-                                      _position = position;
-                                    });
-                                  },
-                                ),
-                              if (_isPlaying || _position > Duration.zero)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(formatTime(_position)),
-                                      Text(formatTime(_duration - _position)),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+            ),
+          if (_currentIndex < widget.items.length - 1)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton(
+                  icon: Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.brown.withOpacity(0.5),
+                    size: 30,
+                  ),
+                  onPressed: () => _pageController.nextPage(
+                    duration: Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  ),
                 ),
-              const SizedBox(height: 10),
-              FutureBuilder<String>(
-                future: _fetchData(widget.details),
-                builder: (context, snapshot) {
-                  if (snapshot.hasData && snapshot.data != null) {
-                    return LayoutBuilder(
-                      builder: (context, constraints) {
-                        final bool isMobile = constraints.maxWidth < 600;
-                        final double paddingValue = isMobile
-                            ? 0.0 // Smaller padding for mobile devices
-                            : constraints.maxWidth *
-                                  0.1; // 10% of the width as padding for larger screens
-                        List<TextSpan> highlightSearchTerm(
-                          BuildContext context,
-                          String text,
-                          String searchTerm,
-                          double fontSize,
-                        ) {
-                          final TextStyle defaultStyle =
-                              Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                fontSize: fontSize,
-                              ) ??
-                              TextStyle(
-                                fontSize: fontSize,
-                                color: Colors.black,
-                              );
-
-                          final Color highlightTextColor =
-                              Theme.of(context).brightness == Brightness.dark
-                              ? Colors.black
-                              : Colors.black;
-
-                          if (searchTerm.isEmpty) {
-                            return parseContent(
-                              context,
-                              text,
-                              fontSize,
-                            ); // ✅ Parse content normally if no search term
-                          }
-
-                          final RegExp regex = RegExp(
-                            searchTerm,
-                            caseSensitive: false,
-                          );
-                          final List<TextSpan> spans = [];
-                          int lastIndex = 0;
-
-                          regex.allMatches(text).forEach((match) {
-                            final String beforeMatch = text.substring(
-                              lastIndex,
-                              match.start,
-                            );
-                            final String matchedText = text.substring(
-                              match.start,
-                              match.end,
-                            );
-
-                            spans.addAll(
-                              parseContent(context, beforeMatch, fontSize),
-                            ); // ✅ Parse before highlight
-
-                            spans.add(
-                              TextSpan(
-                                text: matchedText,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: fontSize,
-                                  color:
-                                      highlightTextColor, // ✅ Adjusted per theme
-                                  backgroundColor: const Color(
-                                    0xFFFFD700,
-                                  ), // Yellow highlight
-                                ),
-                              ),
-                            );
-
-                            lastIndex = match.end;
-                          });
-
-                          spans.addAll(
-                            parseContent(
-                              context,
-                              text.substring(lastIndex),
-                              fontSize,
-                            ),
-                          );
-
-                          return spans;
-                        }
-
-                        return SingleChildScrollView(
-                          physics: const ClampingScrollPhysics(),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: paddingValue,
-                              vertical: 16.0,
-                            ),
-                            child: Align(
-                              alignment: Alignment
-                                  .center, // Center align text for larger screens
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minWidth: isMobile
-                                      ? constraints.maxWidth
-                                      : constraints.maxWidth * 0.8,
-                                  maxWidth: constraints.maxWidth,
-                                ),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: isMobile ? 0 : paddingValue,
-                                  ), // Add horizontal padding to center the text
-                                  child: SelectableText.rich(
-                                    TextSpan(
-                                      children: highlightSearchTerm(
-                                        context,
-                                        widget.details,
-                                        widget.searchTerm,
-                                        _fontSize,
-                                      ),
-                                    ),
-                                    toolbarOptions: const ToolbarOptions(
-                                      copy: true,
-                                      cut: true,
-                                      paste: true,
-                                      selectAll: true,
-                                    ),
-                                    showCursor: true,
-                                    style: TextStyle(
-                                      fontSize: _fontSize,
-                                      height: 1.8,
-                                      letterSpacing: 0.5,
-                                      color: isDarkMode == true
-                                          ? Colors.white
-                                          : Color.fromRGBO(88, 74, 54, 1.0),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  } else if (snapshot.hasError) {
-                    return Text('Error: ${snapshot.error}');
-                  } else {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                },
               ),
-              const SizedBox(height: 150),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
       floatingActionButton: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: FloatingActionButton(
-              heroTag: 'fab1',
-              onPressed: _increaseFontSize,
-              backgroundColor: const Color(0xFFF5F5F5),
-              child: const Icon(
-                Icons.add,
-                color: Color.fromARGB(241, 179, 93, 78),
-              ),
-            ),
-          ),
+          _buildFAB(Icons.add, _increaseFontSize, 'fab1'),
           const SizedBox(width: 12),
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: FloatingActionButton(
-              heroTag: 'fab2',
-              onPressed: _decreaseFontSize,
-              backgroundColor: const Color(0xFFF5F5F5),
-              child: const Icon(
-                Icons.remove,
-                color: Color.fromARGB(241, 179, 93, 78),
-              ),
-            ),
-          ),
+          _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
           const SizedBox(width: 12),
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: FloatingActionButton(
-              heroTag: 'fab3',
-              onPressed: _copyContentToClipboard,
-              backgroundColor: const Color(0xFFF5F5F5),
-              child: const Icon(
-                Icons.content_copy,
-                color: Color.fromARGB(241, 179, 93, 78),
-              ),
-            ),
-          ),
+          _buildFAB(Icons.content_copy, _copyContentToClipboard, 'fab3'),
           const SizedBox(width: 12),
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: FloatingActionButton(
-              heroTag: 'fab4',
-              onPressed: _shareDetailLink,
-              backgroundColor: const Color(0xFFF5F5F5),
-              child: const Icon(
-                Icons.share,
-                color: Color.fromARGB(241, 179, 93, 78),
-              ),
-            ),
-          ),
+          _buildFAB(Icons.share, _shareDetailLink, 'fab4'),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
-  void _shareDetailLink() {
-    final shareText =
-        '${widget.title}\n https://buddhaword.free.nf/sutra/details/${widget.id}';
-    Share.share(shareText, subject: widget.title);
+  Widget _buildFAB(IconData icon, VoidCallback onPressed, String heroTag) {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: FloatingActionButton(
+        heroTag: heroTag,
+        onPressed: onPressed,
+        backgroundColor: const Color(0xFFF5F5F5),
+        child: Icon(icon, color: Color.fromARGB(241, 179, 93, 78)),
+      ),
+    );
   }
 
-  Future<String> _fetchData(String url) async {
+  Widget _buildPageContent(Map<String, dynamic> item) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Container(
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.of(context).size.height,
+        ),
+        padding: const EdgeInsets.all(8.0),
+        color: isDarkMode == true
+            ? Colors.black
+            : Color.fromRGBO(246, 238, 217, 1.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: SelectableText(
+                item['title'],
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Divider(color: Colors.black, thickness: 1, height: 1),
+            const SizedBox(height: 10),
+            if (item['audio'] != '/' && hasInternet)
+              _buildAudioPlayer(item['audio']),
+            const SizedBox(height: 10),
+            _buildSutraContent(item['details']),
+            const SizedBox(height: 150),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAudioPlayer(String audioUrl) {
+    return Center(
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: Icon(
+                  _isRepeating ? Icons.repeat_one : Icons.repeat,
+                  color: Colors.brown,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _isRepeating = !_isRepeating;
+                    _player.setLoopMode(
+                      _isRepeating ? LoopMode.one : LoopMode.off,
+                    );
+                  });
+                },
+              ),
+              const SizedBox(width: 10),
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: Colors.brown.shade600,
+                child: IconButton(
+                  icon: Icon(
+                    _isPlaying ? Icons.pause : Icons.play_arrow,
+                    color: Colors.white,
+                  ),
+                  onPressed: _playPauseAudio,
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconButton(
+                icon: const Icon(Icons.download, color: Colors.brown),
+                onPressed: () => _downloadAudio(audioUrl),
+              ),
+            ],
+          ),
+          if (_isPlaying || _position > Duration.zero)
+            Column(
+              children: [
+                Slider(
+                  min: 0.0,
+                  max: _duration.inSeconds.toDouble(),
+                  value: _position.inSeconds.toDouble().clamp(
+                    0.0,
+                    _duration.inSeconds.toDouble(),
+                  ),
+                  onChanged: (value) async {
+                    final position = Duration(seconds: value.toInt());
+                    await _player.seek(position);
+                  },
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(formatTime(_position)),
+                      Text(formatTime(_duration - _position)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSutraContent(String url) {
+    return FutureBuilder<String>(
+      future: _fetchData(url),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final bool isMobile = constraints.maxWidth < 600;
+              final double paddingValue = isMobile
+                  ? 0.0
+                  : constraints.maxWidth * 0.1;
+              return Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: paddingValue,
+                  vertical: 16.0,
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minWidth: isMobile
+                          ? constraints.maxWidth
+                          : constraints.maxWidth * 0.8,
+                      maxWidth: constraints.maxWidth,
+                    ),
+                    child: SelectableText.rich(
+                      TextSpan(
+                        children: highlightSearchTerm(
+                          context,
+                          snapshot
+                              .data!, // Fixed: passing fetched content, not URL
+                          widget.searchTerm,
+                          _fontSize,
+                        ),
+                      ),
+                      style: TextStyle(
+                        fontSize: _fontSize,
+                        height: 1.8,
+                        letterSpacing: 0.5,
+                        color: isDarkMode == true
+                            ? Colors.white
+                            : Color.fromRGBO(88, 74, 54, 1.0),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        } else if (snapshot.hasError) {
+          return Text('Error loading content');
+        } else {
+          return const Center(child: CircularProgressIndicator());
+        }
+      },
+    );
+  }
+
+  List<TextSpan> highlightSearchTerm(
+    BuildContext context,
+    String text,
+    String searchTerm,
+    double fontSize,
+  ) {
+    final TextStyle defaultStyle = TextStyle(
+      fontSize: fontSize,
+      color: isDarkMode == true
+          ? Colors.white
+          : Color.fromRGBO(88, 74, 54, 1.0),
+    );
+
+    if (searchTerm.isEmpty) {
+      return parseContent(context, text, fontSize, isDarkMode == true);
+    }
+
+    final RegExp regex = RegExp(searchTerm, caseSensitive: false);
+    final List<TextSpan> spans = [];
+    int lastIndex = 0;
+
+    regex.allMatches(text).forEach((match) {
+      final String beforeMatch = text.substring(lastIndex, match.start);
+      final String matchedText = text.substring(match.start, match.end);
+
+      spans.addAll(
+        parseContent(context, beforeMatch, fontSize, isDarkMode == true),
+      );
+      spans.add(
+        TextSpan(
+          text: matchedText,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: fontSize,
+            color: Colors.black,
+            backgroundColor: const Color(0xFFFFD700),
+          ),
+        ),
+      );
+      lastIndex = match.end;
+    });
+
+    spans.addAll(
+      parseContent(
+        context,
+        text.substring(lastIndex),
+        fontSize,
+        isDarkMode == true,
+      ),
+    );
+    return spans;
+  }
+
+  void _shareDetailLink() {
+    final item = widget.items[_currentIndex];
+    final shareText =
+        '${item['title']}\n https://buddhaword.free.nf/sutra/details/${item['id']}';
+    Share.share(shareText, subject: item['title']);
+  }
+
+  Future<String> _fetchData(String detail) async {
+    if (!detail.startsWith('http')) {
+      return detail;
+    }
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse(detail));
       if (response.statusCode == 200) {
         return response.body;
       } else {
-        return '';
+        return 'Error: Failed to load content (Status: ${response.statusCode})';
       }
     } catch (e) {
-      return '';
+      return 'Error: $e';
     }
   }
 
   Future<void> _copyContentToClipboard() async {
-    String copiedText = widget.details.replaceAll(
-      RegExp(r'<\/?b>'),
-      '',
-    ); // Remove <b> and </b> tags
-    Clipboard.setData(ClipboardData(text: copiedText));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Content copied to clipboard')),
-    );
+    final item = widget.items[_currentIndex];
+    String content = await _fetchData(item['details']);
+    String cleanedText = content.replaceAll(RegExp(r'<\/?b>'), '');
+    Clipboard.setData(ClipboardData(text: cleanedText));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Content copied to clipboard')),
+      );
+    }
   }
 
   Future<void> _loadFontSizeFromSharedPreferences() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final double fontSize = prefs.getDouble('fontSize') ?? 18.0;
+    final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _fontSize = fontSize;
+      _fontSize = prefs.getDouble('fontSize') ?? 18.0;
     });
   }
 
   Future<void> _saveFontSizeToSharedPreferences(double fontSize) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('fontSize', fontSize);
   }
 
   void _increaseFontSize() {
-    setState(() {
-      _fontSize += 2.0;
-    });
+    setState(() => _fontSize += 2.0);
     _saveFontSizeToSharedPreferences(_fontSize);
   }
 
   void _decreaseFontSize() {
-    setState(() {
-      _fontSize = _fontSize > 2.0 ? _fontSize - 2.0 : _fontSize;
-    });
+    setState(() => _fontSize = _fontSize > 2.0 ? _fontSize - 2.0 : _fontSize);
     _saveFontSizeToSharedPreferences(_fontSize);
   }
 }
@@ -748,22 +631,21 @@ List<TextSpan> parseContent(
   BuildContext context,
   String content,
   double fontSize,
+  bool isDarkMode,
 ) {
-  final TextStyle defaultStyle =
-      Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: fontSize) ??
-      TextStyle(fontSize: fontSize, color: Colors.black);
+  final TextStyle defaultStyle = TextStyle(
+    fontSize: fontSize,
+    color: isDarkMode ? Colors.white : Color.fromRGBO(88, 74, 54, 1.0),
+  );
 
   final List<TextSpan> children = [];
   final List<String> parts = content.split(RegExp(r'(<b>|<\/b>)'));
 
   for (int i = 0; i < parts.length; i++) {
     final String part = parts[i];
-
     if (i % 2 == 0) {
-      // ✅ Normal text
       children.add(TextSpan(text: part, style: defaultStyle));
     } else {
-      // ✅ Bold text
       children.add(
         TextSpan(
           text: part,
@@ -772,6 +654,5 @@ List<TextSpan> parseContent(
       );
     }
   }
-
   return children;
 }
