@@ -56,8 +56,6 @@ class _DetailPageState extends State<DetailPage> {
   bool hasInternet = false;
   bool? isDarkMode;
   bool _isFullScreen = false;
-  bool _showUI = true;
-  double _lastScrollOffset = 0;
   bool _playerReady = false;
 
   @override
@@ -316,8 +314,6 @@ class _DetailPageState extends State<DetailPage> {
       _ytStateSubscription?.cancel();
       _ytController?.close();
       _ytController = null;
-      _lastScrollOffset = 0;
-      _showUI = true;
     });
     _loadFavoriteState();
   }
@@ -327,7 +323,7 @@ class _DetailPageState extends State<DetailPage> {
     final currentItem = widget.items[_currentIndex];
 
     return Scaffold(
-      appBar: _isFullScreen || !_showUI
+      appBar: _isFullScreen
           ? PreferredSize(
               preferredSize: Size.zero,
               child: const SizedBox.shrink(),
@@ -405,7 +401,7 @@ class _DetailPageState extends State<DetailPage> {
             },
           ),
           // Navigation Buttons Overlay
-          if (!_isFullScreen && _showUI && _currentIndex > 0)
+          if (!_isFullScreen && _currentIndex > 0)
             Positioned(
               left: 0,
               top: 0,
@@ -424,9 +420,7 @@ class _DetailPageState extends State<DetailPage> {
                 ),
               ),
             ),
-          if (!_isFullScreen &&
-              _showUI &&
-              _currentIndex < widget.items.length - 1)
+          if (!_isFullScreen && _currentIndex < widget.items.length - 1)
             Positioned(
               right: 0,
               top: 0,
@@ -479,8 +473,7 @@ class _DetailPageState extends State<DetailPage> {
             ),
         ],
       ),
-      floatingActionButton: _isFullScreen || !_showUI
-          ? null
+      floatingActionButton: _isFullScreen ? null
           : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -514,20 +507,7 @@ class _DetailPageState extends State<DetailPage> {
     final String audioUrl = item['audio'] ?? '/';
     final bool hasAudio = audioUrl != '/' && hasInternet;
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: (notification) {
-        if (!_isFullScreen && notification is ScrollUpdateNotification) {
-          final delta = notification.metrics.pixels - _lastScrollOffset;
-          if (delta > 5 && notification.metrics.pixels > 50) {
-            if (_showUI) setState(() => _showUI = false);
-          } else if (delta < -5) {
-            if (!_showUI) setState(() => _showUI = true);
-          }
-          _lastScrollOffset = notification.metrics.pixels;
-        }
-        return false;
-      },
-      child: Container(
+    return Container(
         color: isDarkMode == true
             ? Colors.black
             : Color.fromRGBO(246, 238, 217, 1.0),
@@ -537,41 +517,42 @@ class _DetailPageState extends State<DetailPage> {
             if (hasAudio) _buildAudioPlayer(audioUrl),
             Expanded(
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const AlwaysScrollableScrollPhysics(),
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 10),
-                      Center(
-                        child: SelectableText(
-                          item['title'],
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
+                  child: RepaintBoundary(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 10),
+                        Center(
+                          child: SelectableText(
+                            item['title'],
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      const Divider(
-                        color: Colors.black,
-                        thickness: 1,
-                        height: 1,
-                      ),
-                      const SizedBox(height: 0),
-                      _buildSutraContent(item['details']),
-                      const SizedBox(height: 150),
-                    ],
+                        const SizedBox(height: 10),
+                        const Divider(
+                          color: Colors.black,
+                          thickness: 1,
+                          height: 1,
+                        ),
+                        const SizedBox(height: 0),
+                        _buildSutraContent(item['details']),
+                        const SizedBox(height: 150),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ],
         ),
-      ),
     );
   }
 

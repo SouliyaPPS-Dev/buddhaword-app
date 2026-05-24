@@ -44,14 +44,20 @@ void main() {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+  State<MyApp> createState() => _MyAppState();
+}
 
-    final GoRouter router = GoRouter(
+class _MyAppState extends State<MyApp> {
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = GoRouter(
       initialLocation: '/splash',
       routes: [
         GoRoute(
@@ -204,6 +210,11 @@ class MyApp extends StatelessWidget {
         GoRoute(path: '/search', builder: (context, state) => SearchPage()),
       ],
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
@@ -215,7 +226,7 @@ class MyApp extends StatelessWidget {
         fontFamily: 'NotoSerifLao',
       ),
       themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      routerConfig: router,
+      routerConfig: _router,
     );
   }
 }
