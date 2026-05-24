@@ -1,16 +1,19 @@
 // ignore_for_file: depend_on_referenced_packages, file_names, use_key_in_widget_constructors, library_private_types_in_public_api, unrelated_type_equality_checks, prefer_const_constructors, avoid_web_libraries_in_flutter, unused_local_variable, deprecated_member_use
 import 'dart:async';
 import 'dart:convert';
-import 'package:just_audio/just_audio.dart';
+import 'dart:io';
+import 'package:just_audio/just_audio.dart'
+    show AudioPlayer, PlayerState, LoopMode;
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart' as yt;
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
 import 'SearchPage.dart';
@@ -42,6 +45,9 @@ class _DetailPageState extends State<DetailPage> {
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
   bool _isRepeating = false;
+  yt.YoutubePlayerController? _ytController;
+  StreamSubscription<yt.YoutubeVideoState>? _ytPositionSubscription;
+  StreamSubscription<yt.YoutubePlayerValue>? _ytStateSubscription;
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
@@ -49,19 +55,22 @@ class _DetailPageState extends State<DetailPage> {
 
   bool hasInternet = false;
   bool? isDarkMode;
+  bool _isFullScreen = false;
+  bool _showUI = true;
+  double _lastScrollOffset = 0;
+  bool _playerReady = false;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
-    _checkConnectivity();
     _loadFavoriteState();
     _loadFontSizeFromSharedPreferences();
-    _initializePlayer();
+    _checkConnectivity();
   }
 
-  void _checkConnectivity() async {
+  Future<void> _checkConnectivity() async {
     var result = await Connectivity().checkConnectivity();
     setState(() {
       hasInternet = !result.contains(ConnectivityResult.none);
@@ -79,66 +88,144 @@ class _DetailPageState extends State<DetailPage> {
     super.didChangeDependencies();
   }
 
-  void _initializePlayer() async {
-    try {
-      await _player.stop();
-      String audioUrl = widget.items[_currentIndex]['audio'] ?? '/';
-      if (audioUrl != '/' && hasInternet) {
-        await _player.setUrl(audioUrl);
-        _playerStateSubscription?.cancel();
-        _playerStateSubscription = _player.playerStateStream.listen((
-          playerState,
-        ) {
-          if (mounted) {
-            setState(() {
-              _isPlaying = playerState.playing;
-            });
-          }
-        });
-        _durationSubscription?.cancel();
-        _durationSubscription = _player.durationStream.listen((duration) {
-          if (mounted) {
-            setState(() {
-              _duration = duration ?? Duration.zero;
-            });
-          }
-        });
-        _positionSubscription?.cancel();
-        _positionSubscription = _player.positionStream.listen((position) {
-          if (mounted) {
-            setState(() {
-              _position = position;
-            });
-          }
+  String _getAudioUrl() => widget.items[_currentIndex]['audio'] ?? '/';
+
+  bool _isYouTubeAudio(String url) =>
+      url.contains('youtube.com') || url.contains('youtu.be');
+
+  String? _extractVideoId(String url) {
+    if (!_isYouTubeAudio(url)) return null;
+    return yt.YoutubePlayerController.convertUrlToId(url);
+  }
+
+  void _setupYouTubeController(String videoId, {bool autoPlay = false}) {
+    _ytPositionSubscription?.cancel();
+    _ytStateSubscription?.cancel();
+    _ytController?.close();
+    _ytController = yt.YoutubePlayerController.fromVideoId(
+      videoId: videoId,
+      autoPlay: autoPlay,
+      params: const yt.YoutubePlayerParams(
+        showControls: false,
+        showFullscreenButton: false,
+        mute: false,
+      ),
+    );
+
+    _ytPositionSubscription = _ytController!.videoStateStream.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        _position = state.position;
+      });
+    });
+
+    _ytStateSubscription = _ytController!.stream.listen((value) {
+      if (!mounted) return;
+      if (_isRepeating && value.playerState == yt.PlayerState.ended) {
+        _ytController?.seekTo(seconds: 0, allowSeekAhead: true);
+        _ytController?.playVideo();
+      }
+      setState(() {
+        _isPlaying = value.playerState == yt.PlayerState.playing;
+        if (value.metaData.duration > Duration.zero) {
+          _duration = value.metaData.duration;
+        }
+      });
+    });
+
+    if (mounted) {
+      setState(() {
+        if (autoPlay) _isPlaying = true;
+      });
+    }
+  }
+
+  Future<void> _setupDirectAudio(String audioUrl) async {
+    _ytPositionSubscription?.cancel();
+    _ytStateSubscription?.cancel();
+    await _player.stop();
+    await _player.setUrl(audioUrl);
+    _playerStateSubscription?.cancel();
+    _playerStateSubscription = _player.playerStateStream.listen((playerState) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = playerState.playing;
         });
       }
-    } catch (e) {
-      if (kDebugMode) print('Error initializing audio player: $e');
+    });
+    _durationSubscription?.cancel();
+    _durationSubscription = _player.durationStream.listen((duration) {
+      if (mounted) {
+        setState(() {
+          _duration = duration ?? Duration.zero;
+        });
+      }
+    });
+    _positionSubscription?.cancel();
+    _positionSubscription = _player.positionStream.listen((position) {
+      if (mounted) {
+        setState(() {
+          _position = position;
+        });
+      }
+    });
+    if (mounted) {
+      setState(() {
+        _playerReady = true;
+      });
     }
   }
 
   @override
   void dispose() {
+    _ytPositionSubscription?.cancel();
+    _ytStateSubscription?.cancel();
     _player.dispose();
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();
     _pageController.dispose();
+    _ytController?.close();
     super.dispose();
   }
 
   void _disposeAudioPlayer() {
+    _ytPositionSubscription?.cancel();
+    _ytStateSubscription?.cancel();
     _player.stop();
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();
+    _ytController?.close();
   }
 
   Future<void> _playPauseAudio() async {
-    if (_isPlaying) {
-      await _player.pause();
+    String audioUrl = _getAudioUrl();
+    final videoId = _extractVideoId(audioUrl);
+
+    if (videoId != null) {
+      if (_ytController == null) {
+        _setupYouTubeController(videoId, autoPlay: true);
+      } else if (_isPlaying) {
+        _ytController?.pauseVideo();
+        setState(() {
+          _isPlaying = false;
+        });
+      } else {
+        _ytController?.playVideo();
+        setState(() {
+          _isPlaying = true;
+        });
+      }
     } else {
-      await _player.play();
+      if (_isPlaying) {
+        await _player.pause();
+      } else {
+        if (!_playerReady) {
+          await _setupDirectAudio(audioUrl);
+        }
+        await _player.play();
+      }
     }
   }
 
@@ -153,9 +240,32 @@ class _DetailPageState extends State<DetailPage> {
     ].join(':');
   }
 
-  void _downloadAudio(String urlAudio) async {
-    if (await canLaunch(urlAudio)) {
-      await launch(urlAudio);
+  Future<void> _downloadAudio(String urlAudio) async {
+    if (_isYouTubeAudio(urlAudio)) {
+      if (await canLaunch(urlAudio)) {
+        await launch(urlAudio);
+      }
+      return;
+    }
+    try {
+      final response = await http.get(Uri.parse(urlAudio));
+      if (response.statusCode == 200) {
+        final dir = await getApplicationDocumentsDirectory();
+        final fileName = urlAudio.split('/').last;
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsBytes(response.bodyBytes);
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Downloaded: $fileName')));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Download failed')));
+      }
     }
   }
 
@@ -195,14 +305,21 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   void _onPageChanged(int index) {
+    _player.stop();
     setState(() {
       _currentIndex = index;
       _isPlaying = false;
+      _playerReady = false;
       _position = Duration.zero;
       _duration = Duration.zero;
+      _ytPositionSubscription?.cancel();
+      _ytStateSubscription?.cancel();
+      _ytController?.close();
+      _ytController = null;
+      _lastScrollOffset = 0;
+      _showUI = true;
     });
     _loadFavoriteState();
-    _initializePlayer();
   }
 
   @override
@@ -210,62 +327,71 @@ class _DetailPageState extends State<DetailPage> {
     final currentItem = widget.items[_currentIndex];
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.brown,
-        title: const Text(
-          'ພຣະສູດ',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-          onPressed: () {
-            _disposeAudioPlayer();
-            Navigator.of(context).pop();
-          },
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isFavorited ? Icons.favorite : Icons.favorite_border,
-              color: Colors.white,
-            ),
-            onPressed: _toggleFavorite,
-          ),
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.white),
-            onPressed: () {
-              _disposeAudioPlayer();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SearchPage()),
-              );
-            },
-          ),
-          Builder(
-            builder: (context) => IconButton(
-              icon: const Icon(Icons.menu_open, color: Colors.white),
-              onPressed: () => Scaffold.of(context).openDrawer(),
-            ),
-          ),
-          Consumer<ThemeProvider>(
-            builder: (context, themeProvider, child) {
-              return IconButton(
-                icon: Text(
-                  themeProvider.isDarkMode ? "☀️" : "🌙",
-                  style: TextStyle(fontSize: 16),
+      appBar: _isFullScreen || !_showUI
+          ? PreferredSize(
+              preferredSize: Size.zero,
+              child: const SizedBox.shrink(),
+            )
+          : AppBar(
+              backgroundColor: Colors.brown,
+              title: const Text(
+                'ພຣະສູດ',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
-                onPressed: () =>
-                    themeProvider.toggleTheme(!themeProvider.isDarkMode),
-              );
-            },
-          ),
-          const SizedBox(width: 10),
-        ],
-      ),
+              ),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                onPressed: () {
+                  _disposeAudioPlayer();
+                  Navigator.of(context).pop();
+                },
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.fullscreen, color: Colors.white),
+                  onPressed: () => setState(() => _isFullScreen = true),
+                ),
+                IconButton(
+                  icon: Icon(
+                    _isFavorited ? Icons.favorite : Icons.favorite_border,
+                    color: Colors.white,
+                  ),
+                  onPressed: _toggleFavorite,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.search, color: Colors.white),
+                  onPressed: () {
+                    _disposeAudioPlayer();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => SearchPage()),
+                    );
+                  },
+                ),
+                Builder(
+                  builder: (context) => IconButton(
+                    icon: const Icon(Icons.menu_open, color: Colors.white),
+                    onPressed: () => Scaffold.of(context).openDrawer(),
+                  ),
+                ),
+                Consumer<ThemeProvider>(
+                  builder: (context, themeProvider, child) {
+                    return IconButton(
+                      icon: Text(
+                        themeProvider.isDarkMode ? "☀️" : "🌙",
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      onPressed: () =>
+                          themeProvider.toggleTheme(!themeProvider.isDarkMode),
+                    );
+                  },
+                ),
+                const SizedBox(width: 10),
+              ],
+            ),
       drawer: const custom_nav.NavigationDrawer(),
       body: Stack(
         children: [
@@ -279,7 +405,7 @@ class _DetailPageState extends State<DetailPage> {
             },
           ),
           // Navigation Buttons Overlay
-          if (_currentIndex > 0)
+          if (!_isFullScreen && _showUI && _currentIndex > 0)
             Positioned(
               left: 0,
               top: 0,
@@ -298,7 +424,9 @@ class _DetailPageState extends State<DetailPage> {
                 ),
               ),
             ),
-          if (_currentIndex < widget.items.length - 1)
+          if (!_isFullScreen &&
+              _showUI &&
+              _currentIndex < widget.items.length - 1)
             Positioned(
               right: 0,
               top: 0,
@@ -317,20 +445,54 @@ class _DetailPageState extends State<DetailPage> {
                 ),
               ),
             ),
+          if (_ytController != null)
+            Positioned(
+              left: -1000,
+              child: SizedBox(
+                width: 200,
+                height: 112,
+                child: yt.YoutubePlayer(
+                  controller: _ytController!,
+                  aspectRatio: 16 / 9,
+                ),
+              ),
+            ),
+          if (_isFullScreen)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              right: 12,
+              child: GestureDetector(
+                onTap: () => setState(() => _isFullScreen = false),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Colors.black26,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.fullscreen_exit,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
-      floatingActionButton: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildFAB(Icons.add, _increaseFontSize, 'fab1'),
-          const SizedBox(width: 12),
-          _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
-          const SizedBox(width: 12),
-          _buildFAB(Icons.content_copy, _copyContentToClipboard, 'fab3'),
-          const SizedBox(width: 12),
-          _buildFAB(Icons.share, _shareDetailLink, 'fab4'),
-        ],
-      ),
+      floatingActionButton: _isFullScreen || !_showUI
+          ? null
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildFAB(Icons.add, _increaseFontSize, 'fab1'),
+                const SizedBox(width: 12),
+                _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
+                const SizedBox(width: 12),
+                _buildFAB(Icons.content_copy, _copyContentToClipboard, 'fab3'),
+                const SizedBox(width: 12),
+                _buildFAB(Icons.share, _shareDetailLink, 'fab4'),
+              ],
+            ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
@@ -349,38 +511,64 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Widget _buildPageContent(Map<String, dynamic> item) {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
+    final String audioUrl = item['audio'] ?? '/';
+    final bool hasAudio = audioUrl != '/' && hasInternet;
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (!_isFullScreen && notification is ScrollUpdateNotification) {
+          final delta = notification.metrics.pixels - _lastScrollOffset;
+          if (delta > 5 && notification.metrics.pixels > 50) {
+            if (_showUI) setState(() => _showUI = false);
+          } else if (delta < -5) {
+            if (!_showUI) setState(() => _showUI = true);
+          }
+          _lastScrollOffset = notification.metrics.pixels;
+        }
+        return false;
+      },
       child: Container(
-        constraints: BoxConstraints(
-          minHeight: MediaQuery.of(context).size.height,
-        ),
-        padding: const EdgeInsets.all(8.0),
         color: isDarkMode == true
             ? Colors.black
             : Color.fromRGBO(246, 238, 217, 1.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: SelectableText(
-                item['title'],
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
+            const SizedBox(height: 10),
+            if (hasAudio) _buildAudioPlayer(audioUrl),
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: SelectableText(
+                          item['title'],
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Divider(
+                        color: Colors.black,
+                        thickness: 1,
+                        height: 1,
+                      ),
+                      const SizedBox(height: 0),
+                      _buildSutraContent(item['details']),
+                      const SizedBox(height: 150),
+                    ],
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 10),
-            const Divider(color: Colors.black, thickness: 1, height: 1),
-            const SizedBox(height: 10),
-            if (item['audio'] != '/' && hasInternet)
-              _buildAudioPlayer(item['audio']),
-            const SizedBox(height: 10),
-            _buildSutraContent(item['details']),
-            const SizedBox(height: 150),
           ],
         ),
       ),
@@ -388,12 +576,37 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Widget _buildAudioPlayer(String audioUrl) {
+    final videoId = _extractVideoId(audioUrl);
+    final bool isYouTube = videoId != null;
+
     return Center(
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              IconButton(
+                icon: const Icon(Icons.replay_10, color: Colors.brown),
+                onPressed: () {
+                  final newPosition = _position - const Duration(seconds: 10);
+                  if (newPosition < Duration.zero) {
+                    if (isYouTube) {
+                      _ytController?.seekTo(seconds: 0, allowSeekAhead: true);
+                    } else {
+                      _player.seek(Duration.zero);
+                    }
+                  } else {
+                    if (isYouTube) {
+                      _ytController?.seekTo(
+                        seconds: newPosition.inSeconds.toDouble(),
+                        allowSeekAhead: true,
+                      );
+                    } else {
+                      _player.seek(newPosition);
+                    }
+                  }
+                },
+              ),
               IconButton(
                 icon: Icon(
                   _isRepeating ? Icons.repeat_one : Icons.repeat,
@@ -402,9 +615,11 @@ class _DetailPageState extends State<DetailPage> {
                 onPressed: () {
                   setState(() {
                     _isRepeating = !_isRepeating;
-                    _player.setLoopMode(
-                      _isRepeating ? LoopMode.one : LoopMode.off,
-                    );
+                    if (!isYouTube) {
+                      _player.setLoopMode(
+                        _isRepeating ? LoopMode.one : LoopMode.off,
+                      );
+                    }
                   });
                 },
               ),
@@ -425,6 +640,31 @@ class _DetailPageState extends State<DetailPage> {
                 icon: const Icon(Icons.download, color: Colors.brown),
                 onPressed: () => _downloadAudio(audioUrl),
               ),
+              IconButton(
+                icon: const Icon(Icons.forward_10, color: Colors.brown),
+                onPressed: () {
+                  final newPosition = _position + const Duration(seconds: 10);
+                  if (newPosition > _duration) {
+                    if (isYouTube) {
+                      _ytController?.seekTo(
+                        seconds: _duration.inSeconds.toDouble(),
+                        allowSeekAhead: true,
+                      );
+                    } else {
+                      _player.seek(_duration);
+                    }
+                  } else {
+                    if (isYouTube) {
+                      _ytController?.seekTo(
+                        seconds: newPosition.inSeconds.toDouble(),
+                        allowSeekAhead: true,
+                      );
+                    } else {
+                      _player.seek(newPosition);
+                    }
+                  }
+                },
+              ),
             ],
           ),
           if (_isPlaying || _position > Duration.zero)
@@ -439,7 +679,14 @@ class _DetailPageState extends State<DetailPage> {
                   ),
                   onChanged: (value) async {
                     final position = Duration(seconds: value.toInt());
-                    await _player.seek(position);
+                    if (isYouTube) {
+                      await _ytController?.seekTo(
+                        seconds: value.toDouble(),
+                        allowSeekAhead: true,
+                      );
+                    } else {
+                      await _player.seek(position);
+                    }
                   },
                 ),
                 Padding(
