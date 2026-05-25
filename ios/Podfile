@@ -46,6 +46,8 @@ post_install do |installer|
       config.build_settings['SWIFT_VERSION'] = '5.0'
       # Relax concurrency diagnostics that fail under Swift 6 in some pods
       config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
+      config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
     end
   end
 end
