@@ -18,6 +18,16 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "28.2.13676358"
 
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            keepDebugSymbols.add("**/*.so")
+        }
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+
     compileOptions {
         // Use Java 17 to avoid obsolete Java 8 warnings and keep plugins consistent
         sourceCompatibility = JavaVersion.VERSION_17
@@ -57,6 +67,9 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("release")
+            ndk {
+                debugSymbolLevel = "NONE"
+            }
         }
     }
 
