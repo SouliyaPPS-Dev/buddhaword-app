@@ -7,18 +7,32 @@ platform :ios do
     upload_testflight
   end
 
+  desc "Build and submit to App Store for review"
+  lane :release do
+    build_ipa
+    upload_testflight(submit_for_review: true)
+  end
+
   desc "Build IPA via Flutter"
   lane :build_ipa do
-    sh "flutter --version"
-    sh "flutter clean"
-    sh "flutter pub get"
-    # Build the IPA; this generates to build/ios/ipa/*.ipa
-    # Build for App Store / TestFlight distribution
-    sh "flutter build ipa --export-method app-store"
+    # Set encoding and PATH to avoid CocoaPods issues
+    ENV["LANG"] = "en_US.UTF-8"
+    ENV["LC_ALL"] = "en_US.UTF-8"
+    ENV["PATH"] = "/opt/homebrew/bin:/usr/local/bin:#{ENV["PATH"]}"
+
+    sh "cd .. && flutter --version"
+    sh "cd .. && flutter clean"
+    sh "cd .. && flutter pub get"
+    
+    # Run pod install directly (not via bundle exec) as it's installed via homebrew
+    sh "pod install"
+    
+    # Build the IPA from the root
+    sh "cd .. && flutter build ipa --export-method app-store --no-pub"
   end
 
   desc "Upload last built IPA to TestFlight"
-  lane :upload_testflight do
+  lane :upload_testflight do |options|
     # Expect App Store Connect API key credentials via env vars
     key_id = ENV["ASC_KEY_ID"]
     issuer_id = ENV["ASC_ISSUER_ID"]
@@ -45,7 +59,7 @@ platform :ios do
     pilot(
       api_key: api_key,
       ipa: ipa_path,
-      skip_submission: true,
+      skip_submission: !options[:submit_for_review],
       skip_waiting_for_build_processing: false,
       distribute_external: (ENV["TESTFLIGHT_DISTRIBUTE_EXTERNAL"] == "true"),
       groups: (ENV["TESTFLIGHT_GROUPS"] || "").split(",").map(&:strip).reject(&:empty?),

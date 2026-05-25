@@ -1,8 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.buddha.lao_tipitaka"
-    android:versionCode="65"
-    android:versionName="65.0.0"
->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="@string/app_name"

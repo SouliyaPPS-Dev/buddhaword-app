@@ -21,7 +21,7 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
-            keepDebugSymbols.add("**/*.so")
+            // keepDebugSymbols.add("**/*.so")
         }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -61,7 +61,7 @@ android {
             }
         }
     }
-    
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
@@ -72,7 +72,6 @@ android {
             }
         }
     }
-
     dependencies {
         implementation("androidx.activity:activity-ktx:1.9.0")
     }
