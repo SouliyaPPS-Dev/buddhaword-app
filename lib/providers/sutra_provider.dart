@@ -25,7 +25,11 @@ class SutraProvider with ChangeNotifier {
 
     if (!hasInternet) {
       if (cachedData != null && cachedData.isNotEmpty) {
-        _data = (json.decode(cachedData) as List).cast<List<dynamic>>();
+        final List<dynamic> cachedList = json.decode(cachedData);
+        _data = cachedList
+            .cast<List<dynamic>>()
+            .where((row) => row.isNotEmpty && row[0].toString() != '0')
+            .toList();
         _updateCategories();
       }
       _isLoading = false;
@@ -48,6 +52,7 @@ class SutraProvider with ChangeNotifier {
         final List<List<dynamic>> values = sheetValues
             .skip(1)
             .map((row) => List<dynamic>.from(row))
+            .where((row) => row.isNotEmpty && row[0].toString() != '0')
             .toList();
 
         _data = values;

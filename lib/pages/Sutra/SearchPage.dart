@@ -232,7 +232,7 @@ class _SearchPageState extends State<SearchPage> {
 
   int _findNextValidAudioIndex(int currentIndex) {
     for (int i = currentIndex + 1; i < _filteredData.length; i++) {
-      final audio = _filteredData[i][5].toString();
+      final audio = _filteredData[i].length > 5 ? _filteredData[i][5].toString() : '';
       if (audio.isNotEmpty && audio != '/') {
         return i;
       }
@@ -242,7 +242,7 @@ class _SearchPageState extends State<SearchPage> {
 
   int _findPreviousValidAudioIndex(int currentIndex) {
     for (int i = currentIndex - 1; i >= 0; i--) {
-      final audio = _filteredData[i][5].toString();
+      final audio = _filteredData[i].length > 5 ? _filteredData[i][5].toString() : '';
       if (audio.isNotEmpty && audio != '/') {
         return i;
       }
@@ -550,8 +550,8 @@ class _SearchPageState extends State<SearchPage> {
                 itemCount: _filteredData.length,
                 itemBuilder: (context, index) {
                   final rowData = _filteredData[index];
-                  final title = rowData[1].toString();
-                  final audio = rowData[5].toString();
+                  final title = rowData.length > 1 ? rowData[1].toString() : '';
+                  final audio = rowData.length > 5 ? rowData[5].toString() : '/';
 
                   return Card(
                     elevation: 8,
@@ -673,8 +673,8 @@ class _SearchPageState extends State<SearchPage> {
                                                           );
                                                       if (previousIndex != -1) {
                                                         final previousAudio =
-                                                            _filteredData[previousIndex][5]
-                                                                .toString();
+                                                            _filteredData[previousIndex].length > 5 ? _filteredData[previousIndex][5]
+                                                                .toString() : '/';
                                                         _playPauseAudio(
                                                           previousIndex,
                                                           previousAudio,
@@ -721,9 +721,8 @@ class _SearchPageState extends State<SearchPage> {
                                                           );
                                                       if (nextIndex != -1) {
                                                         final nextAudio =
-                                                            _filteredData[nextIndex][5]
-                                                                .toString();
-                                                        _playPauseAudio(
+                                                            _filteredData[nextIndex].length > 5 ? _filteredData[nextIndex][5]
+                                                                .toString() : '/';                                                        _playPauseAudio(
                                                           nextIndex,
                                                           nextAudio,
                                                         );
@@ -806,11 +805,11 @@ class _SearchPageState extends State<SearchPage> {
                                   items: _filteredData
                                       .map(
                                         (e) => {
-                                          'id': e[0],
-                                          'title': e[1],
-                                          'details': e[3],
-                                          'category': e[4],
-                                          'audio': e[5],
+                                          'id': e.isNotEmpty ? e[0] : '',
+                                          'title': e.length > 1 ? e[1] : '',
+                                          'details': e.length > 3 ? e[3] : '',
+                                          'category': e.length > 4 ? e[4] : '',
+                                          'audio': e.length > 5 ? e[5] : '/',
                                         },
                                       )
                                       .toList(),

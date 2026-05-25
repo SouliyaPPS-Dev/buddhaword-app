@@ -88,21 +88,29 @@ class _MyAppState extends State<MyApp> {
                     body: Center(child: Text('Sutra not found')),
                   );
                 }
+                final initialIndex = sutraProvider.data.indexWhere(
+                  (e) => e.isNotEmpty && e[0].toString() == id,
+                );
+
+                if (initialIndex == -1) {
+                  return const Scaffold(
+                    body: Center(child: Text('Sutra not found in data')),
+                  );
+                }
+
                 return DetailPage(
                   items: sutraProvider.data
                       .map(
                         (e) => {
-                          'id': e[0],
-                          'title': e[1],
-                          'details': e[3],
-                          'category': e[4],
-                          'audio': e[5],
+                          'id': e.isNotEmpty ? e[0].toString() : '',
+                          'title': e.length > 1 ? e[1].toString() : '',
+                          'details': e.length > 3 ? e[3].toString() : '',
+                          'category': e.length > 4 ? e[4].toString() : '',
+                          'audio': e.length > 5 ? e[5].toString() : '/',
                         },
                       )
                       .toList(),
-                  initialIndex: sutraProvider.data.indexWhere(
-                    (e) => e[0].toString() == id,
-                  ),
+                  initialIndex: initialIndex,
                   searchTerm: '',
                   onFavoriteChanged: () {},
                 );
@@ -158,11 +166,11 @@ class _MyAppState extends State<MyApp> {
                   );
                 }
                 return PlayVideoPage(
-                  id: video[0].toString(),
-                  title: video[1].toString(),
-                  details: video[2].toString(),
-                  category: video[3].toString(),
-                  link: video[4].toString(),
+                  id: video.isNotEmpty ? video[0].toString() : '',
+                  title: video.length > 1 ? video[1].toString() : '',
+                  details: video.length > 2 ? video[2].toString() : '',
+                  category: video.length > 3 ? video[3].toString() : '',
+                  link: video.length > 4 ? video[4].toString() : '',
                 );
               },
             );
@@ -515,7 +523,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   int _findNextValidAudioIndex(int currentIndex) {
     for (int i = currentIndex + 1; i < _filteredData.length; i++) {
-      final audio = _filteredData[i][5].toString();
+      final audio = _filteredData[i].length > 5 ? _filteredData[i][5].toString() : '';
       if (audio.isNotEmpty && audio != '/') {
         return i;
       }
@@ -525,7 +533,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   int _findPreviousValidAudioIndex(int currentIndex) {
     for (int i = currentIndex - 1; i >= 0; i--) {
-      final audio = _filteredData[i][5].toString();
+      final audio = _filteredData[i].length > 5 ? _filteredData[i][5].toString() : '';
       if (audio.isNotEmpty && audio != '/') {
         return i;
       }
@@ -906,9 +914,9 @@ class _MyHomePageState extends State<MyHomePage> {
                           itemCount: _filteredData.length,
                           itemBuilder: (context, index) {
                             final rowData = _filteredData[index];
-                            final id = rowData[0].toString();
-                            final title = rowData[1].toString();
-                            final audio = rowData[5].toString();
+                            final id = rowData.isNotEmpty ? rowData[0].toString() : '';
+                            final title = rowData.length > 1 ? rowData[1].toString() : '';
+                            final audio = rowData.length > 5 ? rowData[5].toString() : '/';
 
                             return Card(
                               elevation: 8,
@@ -1171,7 +1179,9 @@ class _MyHomePageState extends State<MyHomePage> {
                                         )
                                       : null,
                                   onTap: () {
-                                    context.push('/sutra/details/$id');
+                                    if (id.isNotEmpty) {
+                                      context.push('/sutra/details/$id');
+                                    }
                                   },
                                 ),
                               ),

@@ -234,7 +234,7 @@ class _CategoryListPageState extends State<CategoryListPage> {
               itemCount: _filteredData.length,
               itemBuilder: (context, index) {
                 final rowData = _filteredData[index];
-                final title = rowData[1].toString();
+                final title = rowData.length > 1 ? rowData[1].toString() : '';
 
                 return Card(
                   elevation: 8,
@@ -268,11 +268,11 @@ class _CategoryListPageState extends State<CategoryListPage> {
                               items: _filteredData
                                   .map(
                                     (e) => {
-                                      'id': e[0],
-                                      'title': e[1],
-                                      'details': e[3],
-                                      'category': e[4],
-                                      'audio': e[5],
+                                      'id': e.isNotEmpty ? e[0] : '',
+                                      'title': e.length > 1 ? e[1] : '',
+                                      'details': e.length > 3 ? e[3] : '',
+                                      'category': e.length > 4 ? e[4] : '',
+                                      'audio': e.length > 5 ? e[5] : '/',
                                     },
                                   )
                                   .toList(),
