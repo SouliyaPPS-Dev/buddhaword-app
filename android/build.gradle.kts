@@ -5,6 +5,17 @@ allprojects {
     }
 }
 
+subprojects {
+    afterEvaluate {
+        extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)?.let {
+            it.defaultConfig.minSdk = 23
+        }
+        extensions.findByType(com.android.build.gradle.AppExtension::class.java)?.let {
+            it.defaultConfig.minSdk = 23
+        }
+    }
+}
+
 val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 
