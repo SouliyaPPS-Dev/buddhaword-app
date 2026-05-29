@@ -54,7 +54,7 @@ class _DetailPageState extends State<DetailPage> {
   StreamSubscription<Duration?>? _durationSubscription;
   StreamSubscription<Duration>? _positionSubscription;
 
-  bool hasInternet = false;
+  bool hasInternet = true;
   bool? isDarkMode;
   bool _isFullScreen = false;
   bool _playerReady = false;
@@ -87,7 +87,15 @@ class _DetailPageState extends State<DetailPage> {
     super.didChangeDependencies();
   }
 
-  String _getAudioUrl() => widget.items[_currentIndex]['audio'] ?? '/';
+  String _extractUrl(String raw) {
+    if (raw == '/') return raw;
+    final match = RegExp(r'https?://[^\s]+').firstMatch(raw.toString());
+    return match?.group(0) ?? raw.toString();
+  }
+
+  String _getAudioUrl() {
+    return _extractUrl(widget.items[_currentIndex]['audio'] ?? '/');
+  }
 
   bool _isYouTubeAudio(String url) =>
       url.contains('youtube.com') || url.contains('youtu.be');
@@ -131,6 +139,7 @@ class _DetailPageState extends State<DetailPage> {
         }
       });
     });
+    if (mounted) setState(() {});
 
     if (mounted) {
       setState(() {
@@ -392,6 +401,18 @@ class _DetailPageState extends State<DetailPage> {
       drawer: const custom_nav.NavigationDrawer(),
       body: Stack(
         children: [
+          if (_ytController != null)
+            Offstage(
+              offstage: true,
+              child: SizedBox(
+                width: 200,
+                height: 112,
+                child: yt.YoutubePlayer(
+                  controller: _ytController!,
+                  aspectRatio: 16 / 9,
+                ),
+              ),
+            ),
           PageView.builder(
             controller: _pageController,
             itemCount: widget.items.length,
@@ -440,18 +461,6 @@ class _DetailPageState extends State<DetailPage> {
                 ),
               ),
             ),
-          if (_ytController != null)
-            Positioned(
-              left: -1000,
-              child: SizedBox(
-                width: 200,
-                height: 112,
-                child: yt.YoutubePlayer(
-                  controller: _ytController!,
-                  aspectRatio: 16 / 9,
-                ),
-              ),
-            ),
           if (_isFullScreen)
             Positioned(
               top: MediaQuery.of(context).padding.top + 8,
@@ -474,7 +483,8 @@ class _DetailPageState extends State<DetailPage> {
             ),
         ],
       ),
-      floatingActionButton: _isFullScreen ? null
+      floatingActionButton: _isFullScreen
+          ? null
           : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -505,55 +515,55 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Widget _buildPageContent(Map<String, dynamic> item) {
-    final String audioUrl = item['audio'] ?? '/';
-    final bool hasAudio = audioUrl != '/' && hasInternet;
+    final String audioUrl = _extractUrl(item['audio'] ?? '/');
+    final bool hasAudio = audioUrl != '/';
 
     return Container(
-        color: isDarkMode == true
-            ? Colors.black
-            : Color.fromRGBO(246, 238, 217, 1.0),
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            if (hasAudio) _buildAudioPlayer(audioUrl),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: RepaintBoundary(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 10),
-                        Center(
-                          child: SelectableText(
-                            item['title'],
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
+      color: isDarkMode == true
+          ? Colors.black
+          : Color.fromRGBO(246, 238, 217, 1.0),
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          if (hasAudio) _buildAudioPlayer(audioUrl),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: RepaintBoundary(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: SelectableText(
+                          item['title'],
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        const Divider(
-                          color: Colors.black,
-                          thickness: 1,
-                          height: 1,
-                        ),
-                        const SizedBox(height: 0),
-                        _buildSutraContent(item['details']),
-                        const SizedBox(height: 150),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Divider(
+                        color: Colors.black,
+                        thickness: 1,
+                        height: 1,
+                      ),
+                      const SizedBox(height: 0),
+                      _buildSutraContent(item['details']),
+                      const SizedBox(height: 150),
+                    ],
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 
