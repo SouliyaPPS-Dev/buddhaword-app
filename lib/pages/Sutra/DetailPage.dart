@@ -61,6 +61,7 @@ class _DetailPageState extends State<DetailPage> {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: _currentIndex);
+    _loadFontSizeFromSharedPreferences();
   }
 
   String _extractUrl(String raw) {
@@ -815,6 +816,16 @@ class _DetailPageState extends State<DetailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Content copied to clipboard')),
       );
+    }
+  }
+
+  Future<void> _loadFontSizeFromSharedPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    final double? saved = prefs.getDouble('fontSize');
+    if (saved != null && mounted) {
+      setState(() {
+        _fontSize = saved;
+      });
     }
   }
 
