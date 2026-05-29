@@ -9,6 +9,7 @@ if (keystorePropertiesFile.exists()) {
 
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -39,10 +40,10 @@ android {
         applicationId = "com.buddha.lao_tipitaka"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
-        versionCode = 69
-        versionName = "69.0.0"
+        versionCode = 70
+        versionName = "70.0.0"
     }
 
     signingConfigs {
