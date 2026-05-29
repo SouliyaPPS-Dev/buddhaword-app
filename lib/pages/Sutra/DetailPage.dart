@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart' as yt;
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
+import 'RandomImagePage.dart';
 import 'SearchPage.dart';
 
 class DetailPage extends StatefulWidget {
@@ -738,7 +739,7 @@ class _DetailPageState extends State<DetailPage> {
         } else if (snapshot.hasError) {
           return Text('Error loading content');
         } else {
-          return const Center(child: CircularProgressIndicator());
+          return const LoadingImage();
         }
       },
     );

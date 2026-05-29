@@ -43,56 +43,41 @@ class _RandomImagePageState extends State<RandomImagePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            double screenWidth = constraints.maxWidth;
-            double screenHeight = constraints.maxHeight;
-
-            // Determine if the device is a desktop
-            bool isDesktop =
-                screenWidth >= 1024; // Adjust this breakpoint as needed
-
-            // Lists of image paths for each device type
-            List<String> desktopImages = [
-              'assets/ເຫັນທຳ/loading_desktop_tablet.jpg',
-            ];
-
-            List<String> tabletImages = ['assets/ເຫັນທຳ/loading_mobile.jpg'];
-
-            List<String> mobileImages = ['assets/ເຫັນທຳ/loading_mobile.jpg'];
-
-            // Select the list of images based on the screen size
-            List<String> selectedImages;
-            if (isDesktop) {
-              selectedImages = desktopImages;
-            } else if (screenWidth >= 600 || screenHeight <= 1366) {
-              selectedImages = tabletImages;
-            } else {
-              selectedImages = mobileImages;
-            }
-
-            // Choose a random image from the selected list
-            String imagePath =
-                selectedImages[Random().nextInt(selectedImages.length)];
-
-            // Set image size to match screen dimensions
-            double imageWidth = screenWidth;
-            double imageHeight = screenHeight;
-
-            return Stack(
-              children: [
-                Image.asset(
-                  imagePath,
-                  width: imageWidth,
-                  height: imageHeight,
-                  fit: BoxFit
-                      .cover, // Ensures the image covers the entire screen
-                ),
-              ],
-            );
-          },
-        ),
+        child: _buildLoadingImage(context),
       ),
     );
+  }
+}
+
+Widget _buildLoadingImage(BuildContext context) {
+  final screenSize = MediaQuery.of(context).size;
+  double screenWidth = screenSize.width;
+  double screenHeight = screenSize.height;
+
+  bool isDesktop = screenWidth >= 1024;
+
+  String imagePath;
+  if (isDesktop) {
+    imagePath = 'assets/ເຫັນທຳ/loading_desktop_tablet.jpg';
+  } else {
+    imagePath = 'assets/ເຫັນທຳ/loading_mobile.jpg';
+  }
+
+  return SizedBox(
+    width: screenWidth,
+    height: screenHeight,
+    child: Image.asset(
+      imagePath,
+      fit: BoxFit.cover,
+    ),
+  );
+}
+
+class LoadingImage extends StatelessWidget {
+  const LoadingImage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return _buildLoadingImage(context);
   }
 }

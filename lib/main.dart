@@ -78,9 +78,7 @@ class _MyAppState extends State<MyApp> {
                   if (!sutraProvider.isLoading) {
                     Future.microtask(() => sutraProvider.fetchData());
                   }
-                  return const Scaffold(
-                    body: Center(child: CircularProgressIndicator()),
-                  );
+                  return RandomImagePage();
                 }
                 final sutra = sutraProvider.getSutraById(id);
                 if (sutra == null) {
@@ -128,9 +126,7 @@ class _MyAppState extends State<MyApp> {
                   if (!sutraProvider.isLoading) {
                     Future.microtask(() => sutraProvider.fetchData());
                   }
-                  return const Scaffold(
-                    body: Center(child: CircularProgressIndicator()),
-                  );
+                  return RandomImagePage();
                 }
                 return CategoryListPage(
                   selectedCategory: category,
@@ -155,9 +151,7 @@ class _MyAppState extends State<MyApp> {
                   if (!videoProvider.isLoading) {
                     Future.microtask(() => videoProvider.fetchData());
                   }
-                  return const Scaffold(
-                    body: Center(child: CircularProgressIndicator()),
-                  );
+                  return RandomImagePage();
                 }
                 final video = videoProvider.getVideoById(id);
                 if (video == null) {
@@ -186,9 +180,7 @@ class _MyAppState extends State<MyApp> {
                   if (!booksProvider.isLoading) {
                     Future.microtask(() => booksProvider.fetchData());
                   }
-                  return const Scaffold(
-                    body: Center(child: CircularProgressIndicator()),
-                  );
+                  return RandomImagePage();
                 }
                 final book = booksProvider.getBookById(id);
                 if (book != null) {
@@ -746,7 +738,7 @@ class _MyHomePageState extends State<MyHomePage> {
       body: Consumer<SutraProvider>(
         builder: (context, sutraProvider, child) {
           if (sutraProvider.isLoading && sutraProvider.data.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+            return RandomImagePage();
           }
           if (sutraProvider.data.isEmpty) {
             return RandomImagePage();

@@ -17,6 +17,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
 import 'DetailPage.dart';
+import 'RandomImagePage.dart';
 import 'SearchPage.dart';
 
 class BookReadingScreenPage extends StatefulWidget {
@@ -816,7 +817,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
                       } else if (snapshot.hasError) {
                         return Text('Error: ${snapshot.error}');
                       } else {
-                        return const Center(child: CircularProgressIndicator());
+                        return const LoadingImage();
                       }
                     },
                   ),
