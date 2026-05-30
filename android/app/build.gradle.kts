@@ -40,10 +40,10 @@ android {
         applicationId = "com.buddha.lao_tipitaka"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 24
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = 70
-        versionName = "70.0.0"
+        versionCode = 73
+        versionName = "73.0.0"
     }
 
     signingConfigs {
