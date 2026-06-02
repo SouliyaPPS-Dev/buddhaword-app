@@ -1,7 +1,3 @@
-plugins {
-    id("org.jetbrains.kotlin.android") version "2.2.20" apply false
-}
-
 allprojects {
     repositories {
         google()
@@ -12,10 +8,10 @@ allprojects {
 subprojects {
     afterEvaluate {
         extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)?.let {
-            it.defaultConfig.minSdk = 21
+            it.defaultConfig.minSdk = 24
         }
         extensions.findByType(com.android.build.gradle.AppExtension::class.java)?.let {
-            it.defaultConfig.minSdk = 21
+            it.defaultConfig.minSdk = 24
         }
     }
 }
