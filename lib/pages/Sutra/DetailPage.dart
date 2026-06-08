@@ -3,7 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:just_audio/just_audio.dart'
-    show AudioPlayer, PlayerState, LoopMode;
+    show AudioPlayer, PlayerState, LoopMode, ProcessingState;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -12,12 +12,13 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
 import 'RandomImagePage.dart';
 import 'SearchPage.dart';
+
+enum _AudioMode { none, audio, tts }
 
 class DetailPage extends StatefulWidget {
   final List<Map<String, dynamic>> items;
@@ -55,8 +56,11 @@ class _DetailPageState extends State<DetailPage> {
   bool _playerReady = false;
   bool _isLoadingAudio = false;
 
-  final FlutterTts _tts = FlutterTts();
-  bool _isTtsSpeaking = false;
+  static const String _ttsBaseUrl = 'https://buddhaword-web.hf.space';
+  static const int _ttsMaxChars = 50000;
+  static const int _ttsChunkSize = 1200;
+
+  _AudioMode _audioMode = _AudioMode.none;
 
   bool get _isDarkMode => context.watch<ThemeProvider>().isDarkMode;
 
@@ -66,6 +70,7 @@ class _DetailPageState extends State<DetailPage> {
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: _currentIndex);
     _loadFontSizeFromSharedPreferences();
+    _loadFavoriteState();
   }
 
   String _extractUrl(String raw) {
@@ -142,6 +147,13 @@ class _DetailPageState extends State<DetailPage> {
         if (mounted) {
           setState(() {
             _isPlaying = playerState.playing;
+            if (playerState.processingState == ProcessingState.completed &&
+                _audioMode == _AudioMode.audio) {
+              _audioMode = _AudioMode.none;
+              _playerReady = false;
+              _position = Duration.zero;
+              _duration = Duration.zero;
+            }
           });
         }
       });
@@ -187,6 +199,13 @@ class _DetailPageState extends State<DetailPage> {
       if (mounted) {
         setState(() {
           _isPlaying = playerState.playing;
+          if (playerState.processingState == ProcessingState.completed &&
+              _audioMode == _AudioMode.audio) {
+            _audioMode = _AudioMode.none;
+            _playerReady = false;
+            _position = Duration.zero;
+            _duration = Duration.zero;
+          }
         });
       }
     });
@@ -222,37 +241,68 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Future<void> _playPauseAudio() async {
-    String audioUrl = _getAudioUrl();
+    final audioUrl = _getAudioUrl();
 
-    if (_isPlaying) {
+    // If TTS is active, stop it and start audio
+    if (_audioMode == _AudioMode.tts) {
+      await _player.stop();
+      _playerReady = false;
+      if (mounted) {
+        setState(() {
+          _audioMode = _AudioMode.none;
+          _isPlaying = false;
+          _playerReady = false;
+          _position = Duration.zero;
+          _duration = Duration.zero;
+          _isLoadingAudio = false;
+        });
+      }
+    }
+
+    // If audio already loaded and playing, pause it
+    if (_audioMode == _AudioMode.audio && _isPlaying) {
       await _player.pause();
+      return;
+    }
+
+    // If audio already loaded and paused, resume it
+    if (_audioMode == _AudioMode.audio && _playerReady) {
+      await _player.play();
       return;
     }
 
     if (_isLoadingAudio) return;
 
+    setState(() {
+      _isLoadingAudio = true;
+      _audioMode = _AudioMode.audio;
+    });
+
     if (!_playerReady) {
-      setState(() {
-        _isLoadingAudio = true;
-      });
       if (_isYouTubeAudio(audioUrl)) {
         await _setupYouTubeAudio(audioUrl);
       } else {
         await _setupDirectAudio(audioUrl);
       }
-      if (!_playerReady) {
+    }
+
+    if (!_playerReady) {
+      if (mounted) {
         setState(() {
           _isLoadingAudio = false;
+          _audioMode = _AudioMode.none;
         });
-        return;
       }
+      return;
     }
+
     try {
       await _player.play();
     } catch (e) {
       if (mounted) {
         setState(() {
           _isLoadingAudio = false;
+          _audioMode = _AudioMode.none;
         });
         ScaffoldMessenger.of(
           context,
@@ -343,6 +393,7 @@ class _DetailPageState extends State<DetailPage> {
       _currentIndex = index;
       _isPlaying = false;
       _isLoadingAudio = false;
+      _audioMode = _AudioMode.none;
       _playerReady = false;
       _position = Duration.zero;
       _duration = Duration.zero;
@@ -507,7 +558,11 @@ class _DetailPageState extends State<DetailPage> {
                 _buildFAB(Icons.share, _shareDetailLink, 'fab4'),
                 const SizedBox(width: 12),
                 _buildFAB(
-                  _isTtsSpeaking ? Icons.stop : Icons.volume_up,
+                  _isLoadingAudio
+                      ? Icons.hourglass_top
+                      : _audioMode == _AudioMode.tts
+                          ? Icons.stop
+                          : Icons.volume_up,
                   _speakContent,
                   'fab5',
                 ),
@@ -628,7 +683,9 @@ class _DetailPageState extends State<DetailPage> {
                           ),
                         )
                       : Icon(
-                          _isPlaying ? Icons.pause : Icons.play_arrow,
+                          _audioMode == _AudioMode.audio && _isPlaying
+                              ? Icons.pause
+                              : Icons.play_arrow,
                           color: Colors.white,
                         ),
                   onPressed: _playPauseAudio,
@@ -652,7 +709,7 @@ class _DetailPageState extends State<DetailPage> {
               ),
             ],
           ),
-          if (_isPlaying || _position > Duration.zero)
+          if (_audioMode == _AudioMode.audio && (_isPlaying || _position > Duration.zero))
             Column(
               children: [
                 Slider(
@@ -800,75 +857,191 @@ class _DetailPageState extends State<DetailPage> {
     return 'en-US';
   }
 
-  Future<void> _setBestVoice(String lang) async {
-    try {
-      final available = await _tts.isLanguageAvailable(lang);
-      if (available == true) {
-        await _tts.setLanguage(lang);
-        return;
+  List<String> _chunkText(String text) {
+    if (text.length <= _ttsChunkSize) return [text];
+
+    final chunks = <String>[];
+    int start = 0;
+
+    while (start < text.length) {
+      int end = start + _ttsChunkSize;
+      if (end >= text.length) {
+        chunks.add(text.substring(start).trim());
+        break;
       }
-      final voices = await _tts.getVoices;
-      if (voices is List && voices.isNotEmpty) {
-        for (final v in voices) {
-          if (v is Map && v['locale'] == lang) {
-            await _tts.setVoice(Map<String, String>.from(v));
-            return;
-          }
-        }
-        final langPrefix = lang.split('-')[0];
-        for (final v in voices) {
-          if (v is Map) {
-            final locale = v['locale']?.toString() ?? '';
-            if (locale.startsWith(langPrefix)) {
-              await _tts.setVoice(Map<String, String>.from(v));
-              return;
-            }
-          }
-        }
-        if (lang == 'lo-LA') {
-          for (final v in voices) {
-            if (v is Map) {
-              final locale = v['locale']?.toString() ?? '';
-              if (locale.startsWith('th')) {
-                await _tts.setVoice(Map<String, String>.from(v));
-                return;
-              }
-            }
-          }
+      // Walk back to find a sentence boundary
+      int breakAt = end;
+      for (int i = end; i > start + _ttsChunkSize - 200 && i > start; i--) {
+        if ('.!?:\n'.contains(text[i])) {
+          breakAt = i + 1;
+          break;
         }
       }
-      await _tts.setLanguage(lang);
-    } catch (_) {
-      try { await _tts.setLanguage(lang); } catch (_) {}
+      chunks.add(text.substring(start, breakAt).trim());
+      start = breakAt;
     }
+    return chunks.where((c) => c.isNotEmpty).toList();
   }
 
   Future<void> _speakContent() async {
-    if (_isTtsSpeaking) {
-      await _tts.stop();
-      setState(() => _isTtsSpeaking = false);
+    // If TTS is already speaking, stop it
+    if (_audioMode == _AudioMode.tts) {
+      await _player.stop();
+      if (mounted) {
+        setState(() {
+          _audioMode = _AudioMode.none;
+          _isPlaying = false;
+          _playerReady = false;
+          _position = Duration.zero;
+          _duration = Duration.zero;
+          _isLoadingAudio = false;
+        });
+      }
       return;
     }
+
+    // If audio is playing, stop it first
+    if (_audioMode == _AudioMode.audio) {
+      await _player.stop();
+      _playerReady = false;
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+          _position = Duration.zero;
+          _duration = Duration.zero;
+          _audioMode = _AudioMode.none;
+        });
+      }
+    }
+
     final item = widget.items[_currentIndex];
     String content = await _fetchData(item['details']);
     content = content.replaceAll(RegExp(r'<\/?b>'), '');
-    final lang = _detectLanguage(content);
-    await _setBestVoice(lang);
-    await _tts.setPitch(0.85);
-    await _tts.setSpeechRate(0.45);
-    _tts.setCompletionHandler(() {
-      if (mounted) setState(() => _isTtsSpeaking = false);
+
+    if (content.length > _ttsMaxChars) {
+      content = content.substring(0, _ttsMaxChars);
+    }
+
+    // Split into smaller chunks for sequential processing
+    final chunks = _chunkText(content);
+    if (chunks.isEmpty) return;
+
+    if (mounted) {
+      setState(() {
+        _audioMode = _AudioMode.tts;
+        _isLoadingAudio = true;
+        _position = Duration.zero;
+        _duration = Duration.zero;
+      });
+    }
+
+    _playerStateSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _positionSubscription?.cancel();
+
+    // Set up subscriptions once for all chunks
+    _playerStateSubscription = _player.playerStateStream.listen((playerState) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = playerState.playing;
+        });
+      }
     });
-    _tts.setErrorHandler((_) {
-      if (mounted) setState(() => _isTtsSpeaking = false);
+    _durationSubscription = _player.durationStream.listen((duration) {
+      if (mounted) setState(() => _duration = duration ?? Duration.zero);
     });
-    await _tts.speak(content);
-    setState(() => _isTtsSpeaking = true);
+    _positionSubscription = _player.positionStream.listen((position) {
+      if (mounted) setState(() => _position = position);
+    });
+
+    // Process chunks sequentially
+    bool hadError = false;
+    for (int i = 0; i < chunks.length; i++) {
+      if (!mounted || _audioMode != _AudioMode.tts || hadError) break;
+
+      final chunk = chunks[i];
+      final lang = _detectLanguage(chunk);
+
+      try {
+        final response = await http.post(
+          Uri.parse('$_ttsBaseUrl/api/tts/synthesize'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'text': chunk, 'language': lang}),
+        );
+
+        if (!mounted || _audioMode != _AudioMode.tts) break;
+
+        if (response.statusCode != 200) {
+          hadError = true;
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('TTS error: ${response.statusCode}')),
+            );
+          }
+          break;
+        }
+
+        final data = json.decode(response.body);
+        if (data['error'] == true) {
+          hadError = true;
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(data['message'] ?? 'TTS failed')),
+            );
+          }
+          break;
+        }
+
+        final audioBytes = base64.decode(data['audioContent']);
+        final dir = await getTemporaryDirectory();
+        final file = File(
+          '${dir.path}/tts_${i}_${DateTime.now().millisecondsSinceEpoch}.mp3',
+        );
+        await file.writeAsBytes(audioBytes);
+
+        if (!mounted || _audioMode != _AudioMode.tts) {
+          await file.delete();
+          break;
+        }
+
+        if (i == 0 && mounted) {
+          setState(() => _isLoadingAudio = false);
+        }
+
+        await _player.setFilePath(file.path);
+        await _player.play();
+
+        // Wait for this chunk to finish (or stop signal via idle state)
+        await _player.processingStateStream.firstWhere(
+          (state) =>
+              state == ProcessingState.completed ||
+              state == ProcessingState.idle,
+        );
+      } catch (e) {
+        if (!mounted || _audioMode != _AudioMode.tts) break;
+        hadError = true;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('TTS error: $e')),
+          );
+        }
+        break;
+      }
+    }
+
+    if (mounted && _audioMode == _AudioMode.tts) {
+      setState(() {
+        _audioMode = _AudioMode.none;
+        _isPlaying = false;
+        _playerReady = false;
+        _position = Duration.zero;
+        _duration = Duration.zero;
+      });
+    }
   }
 
   @override
   void dispose() {
-    _tts.stop();
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();

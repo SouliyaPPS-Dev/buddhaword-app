@@ -10,10 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
@@ -62,7 +63,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
 
   bool hasInternet = false;
 
-  final FlutterTts _tts = FlutterTts();
+  static const String _ttsBaseUrl = 'https://buddhaword-web.hf.space';
   bool _isTtsSpeaking = false;
 
   // check if the current theme is dark or not
@@ -213,7 +214,6 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
 
   @override
   void dispose() {
-    _tts.stop();
     _disposeAudioPlayer();
 
     _themeCheckTimer?.cancel();
@@ -262,6 +262,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
   void _onPageChanged(int index) {
     setState(() {
       _currentPageIndex = index;
+      _isTtsSpeaking = false;
     });
     _loadFavoriteState();
 
@@ -931,69 +932,69 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
     return 'en-US';
   }
 
-  Future<void> _setBestVoice(String lang) async {
-    try {
-      final available = await _tts.isLanguageAvailable(lang);
-      if (available == true) {
-        await _tts.setLanguage(lang);
-        return;
-      }
-      final voices = await _tts.getVoices;
-      if (voices is List && voices.isNotEmpty) {
-        for (final v in voices) {
-          if (v is Map && v['locale'] == lang) {
-            await _tts.setVoice(Map<String, String>.from(v));
-            return;
-          }
-        }
-        final langPrefix = lang.split('-')[0];
-        for (final v in voices) {
-          if (v is Map) {
-            final locale = v['locale']?.toString() ?? '';
-            if (locale.startsWith(langPrefix)) {
-              await _tts.setVoice(Map<String, String>.from(v));
-              return;
-            }
-          }
-        }
-        if (lang == 'lo-LA') {
-          for (final v in voices) {
-            if (v is Map) {
-              final locale = v['locale']?.toString() ?? '';
-              if (locale.startsWith('th')) {
-                await _tts.setVoice(Map<String, String>.from(v));
-                return;
-              }
-            }
-          }
-        }
-      }
-      await _tts.setLanguage(lang);
-    } catch (_) {
-      try { await _tts.setLanguage(lang); } catch (_) {}
-    }
-  }
-
   Future<void> _speakContent() async {
     if (_isTtsSpeaking) {
-      await _tts.stop();
       setState(() => _isTtsSpeaking = false);
       return;
     }
     String content = await _fetchData(getCurrentDetail());
     content = content.replaceAll(RegExp(r'<\/?b>'), '');
-    final lang = _detectLanguage(content);
-    await _setBestVoice(lang);
-    await _tts.setPitch(0.85);
-    await _tts.setSpeechRate(0.45);
-    _tts.setCompletionHandler(() {
-      if (mounted) setState(() => _isTtsSpeaking = false);
-    });
-    _tts.setErrorHandler((_) {
-      if (mounted) setState(() => _isTtsSpeaking = false);
-    });
-    await _tts.speak(content);
-    setState(() => _isTtsSpeaking = true);
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_ttsBaseUrl/api/tts/synthesize'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'text': content,
+          'language': _detectLanguage(content),
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('TTS error: ${response.statusCode}')),
+          );
+        }
+        return;
+      }
+
+      final data = json.decode(response.body);
+      if (data['error'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['message'] ?? 'TTS failed')),
+          );
+        }
+        return;
+      }
+
+      final audioBytes = base64.decode(data['audioContent']);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/tts_${DateTime.now().millisecondsSinceEpoch}.mp3');
+      await file.writeAsBytes(audioBytes);
+
+      _disposeAudioPlayer();
+      await _player.setFilePath(file.path);
+
+      _playerStateSubscription?.cancel();
+      _playerStateSubscription = _player.playerStateStream.listen((playerState) {
+        if (mounted) {
+          setState(() {
+            _isTtsSpeaking = playerState.playing;
+          });
+        }
+      });
+
+      await _player.play();
+      if (mounted) setState(() => _isTtsSpeaking = true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('TTS error: $e')),
+        );
+      }
+    }
   }
 
   void _shareDetailLink() {

@@ -1,6 +1,9 @@
 // ignore_for_file: library_private_types_in_public_api, file_names, prefer_const_constructors, unnecessary_null_comparison, deprecated_member_use
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/sutra_provider.dart';
 
@@ -28,6 +31,7 @@ class CategoryListPage extends StatefulWidget {
 class _CategoryListPageState extends State<CategoryListPage> {
   late List<List<dynamic>> _filteredData;
   final TextEditingController _searchController = TextEditingController();
+  List<String> _favorites = [];
 
   @override
   void initState() {
@@ -36,6 +40,7 @@ class _CategoryListPageState extends State<CategoryListPage> {
         widget.data ?? Provider.of<SutraProvider>(context, listen: false).data;
     _filteredData = _filterData(widget.searchTerm, data);
     _searchController.text = widget.searchTerm;
+    _loadFavorites();
   }
 
   @override
@@ -57,6 +62,62 @@ class _CategoryListPageState extends State<CategoryListPage> {
               ),
         )
         .toList();
+  }
+
+  Future<void> _loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _favorites = prefs.getStringList('favorites') ?? [];
+      });
+    }
+  }
+
+  bool _isItemFavorited(List<dynamic> rowData) {
+    final id = rowData.isNotEmpty ? rowData[0].toString() : '';
+    final title = rowData.length > 1 ? rowData[1].toString() : '';
+    return _favorites.any((fav) {
+      final current = json.decode(fav) as Map<String, dynamic>;
+      return current['id'] == id && current['title'] == title;
+    });
+  }
+
+  Future<void> _toggleFavoriteItem(List<dynamic> rowData) async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = rowData.isNotEmpty ? rowData[0].toString() : '';
+    final title = rowData.length > 1 ? rowData[1].toString() : '';
+    final image = rowData.length > 2 ? rowData[2].toString() : '';
+    final details = rowData.length > 3 ? rowData[3].toString() : '';
+    final category = rowData.length > 4 ? rowData[4].toString() : '';
+    final audio = rowData.length > 5 ? rowData[5].toString() : '/';
+
+    final item = {
+      'id': id,
+      'title': title,
+      'image': image,
+      'details': details,
+      'category': category,
+      'audio': audio,
+    };
+
+    final isFavorited = _isItemFavorited(rowData);
+    final currentFavorites = prefs.getStringList('favorites') ?? [];
+
+    if (isFavorited) {
+      currentFavorites.removeWhere((fav) {
+        final current = json.decode(fav) as Map<String, dynamic>;
+        return current['id'] == id && current['title'] == title;
+      });
+    } else {
+      currentFavorites.add(json.encode(item));
+    }
+
+    await prefs.setStringList('favorites', currentFavorites);
+    if (mounted) {
+      setState(() {
+        _favorites = currentFavorites;
+      });
+    }
   }
 
   @override
@@ -259,6 +320,15 @@ class _CategoryListPageState extends State<CategoryListPage> {
                           );
                         },
                       ),
+                      trailing: IconButton(
+                        icon: Icon(
+                          _isItemFavorited(rowData)
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          color: Colors.red,
+                        ),
+                        onPressed: () => _toggleFavoriteItem(rowData),
+                      ),
                       onTap: () {
                         // Navigate to detail page or perform other actions
                         Navigator.push(
@@ -278,7 +348,7 @@ class _CategoryListPageState extends State<CategoryListPage> {
                                   .toList(),
                               initialIndex: index,
                               searchTerm: _searchController.text,
-                              onFavoriteChanged: () => setState(() {}),
+                              onFavoriteChanged: () => _loadFavorites(),
                             ),
                           ),
                         );

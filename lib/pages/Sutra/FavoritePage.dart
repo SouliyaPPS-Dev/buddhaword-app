@@ -108,6 +108,21 @@ class _FavoritePageState extends State<FavoritePage> {
     });
   }
 
+  Future<void> _toggleFavoriteItem(String item) async {
+    final prefs = await SharedPreferences.getInstance();
+    final updatedFavorites = List<String>.from(_favorites);
+    updatedFavorites.remove(item);
+    await prefs.setStringList('favorites', updatedFavorites);
+    setState(() {
+      _favorites = updatedFavorites;
+      if (_searchTerm.isNotEmpty) {
+        _filterFavorites(_searchTerm);
+      } else {
+        _filteredFavorites = List.from(_favorites);
+      }
+    });
+  }
+
   Future<void> _deleteAllFavorites() async {
     await showDialog(
       context: context,
@@ -600,7 +615,18 @@ class _FavoritePageState extends State<FavoritePage> {
                                     ),
                                     SizedBox(
                                       width: 10,
-                                    ), // Space between the button and title
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.favorite,
+                                        color: Colors.red,
+                                      ),
+                                      iconSize: 20,
+                                      onPressed: () =>
+                                          _toggleFavoriteItem(item),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                    ),
                                     if (audio != '/')
                                       CircleAvatar(
                                         radius:
