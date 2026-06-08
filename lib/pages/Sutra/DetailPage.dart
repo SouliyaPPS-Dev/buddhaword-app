@@ -787,7 +787,7 @@ class _DetailPageState extends State<DetailPage> {
   void _shareDetailLink() {
     final item = widget.items[_currentIndex];
     final shareText =
-        '${item['title']}\n https://buddhaword.free.nf/sutra/details/${item['id']}';
+        '${item['title']}\n https://buddhaword-web.hf.space/sutra/details/${item['id']}';
     Share.share(shareText, subject: item['title']);
   }
 

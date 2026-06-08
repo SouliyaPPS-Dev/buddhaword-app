@@ -494,7 +494,7 @@ class _PlayVideoPageState extends State<PlayVideoPage> {
   }
 
   void _shareVideoLink() {
-    final url = 'https://buddhaword.free.nf/video/view/$_videoID';
+    final url = 'https://buddhaword-web.hf.space/video/view/$_videoID';
 
     final shareText = '$_videoTitle\n $url';
 

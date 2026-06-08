@@ -54,7 +54,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   void _shareCalendar() {
-    final url = 'https://buddhaword.free.nf/calendar';
+    final url = 'https://buddhaword-web.hf.space/calendar';
     String? title = 'ປະຕິທິນທັມ';
     final shareText = '$title\n $url';
 
@@ -87,7 +87,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   // Function to scroll down the page progressively when the button is pressed.
-// Toggle scroll direction and update the FAB icon
+  // Toggle scroll direction and update the FAB icon
   void _toggleScrollDirection() {
     setState(() {
       _isScrollingDown = !_isScrollingDown;
@@ -143,13 +143,17 @@ class _CalendarPageState extends State<CalendarPage> {
   Future<void> fetchCalendarData() async {
     final storage = await getFromSharedPreferences('slideLocalData');
 
-    bool hasInternet =
-        !(await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
+    bool hasInternet = !(await Connectivity().checkConnectivity()).contains(
+      ConnectivityResult.none,
+    );
 
     try {
       if (hasInternet) {
-        final response = await http.get(Uri.parse(
-            'https://sheets.googleapis.com/v4/spreadsheets/1mKtgmZ_Is4e6P3P5lvOwIplqx7VQ3amicgienGN9zwA/values/calendar!1:1000000?key=AIzaSyDFjIl-SEHUsgK0sjMm7x0awpf8tTEPQjs'));
+        final response = await http.get(
+          Uri.parse(
+            'https://sheets.googleapis.com/v4/spreadsheets/1mKtgmZ_Is4e6P3P5lvOwIplqx7VQ3amicgienGN9zwA/values/calendar!1:1000000?key=AIzaSyDFjIl-SEHUsgK0sjMm7x0awpf8tTEPQjs',
+          ),
+        );
 
         if (response.statusCode == 200) {
           final Map<String, dynamic> jsonResponse = json.decode(response.body);
@@ -227,9 +231,11 @@ class _CalendarPageState extends State<CalendarPage> {
             ? DateFormat('dd/MM/yyyy').parse(event[3])
             : startDate;
 
-        for (DateTime date = startDate;
-            date.isBefore(endDate.add(Duration(days: 1)));
-            date = date.add(Duration(days: 1))) {
+        for (
+          DateTime date = startDate;
+          date.isBefore(endDate.add(Duration(days: 1)));
+          date = date.add(Duration(days: 1))
+        ) {
           final dateKey = DateTime(date.year, date.month, date.day);
 
           if (eventMap.containsKey(dateKey)) {
@@ -247,7 +253,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   // Update _loadCachedData to calculate events once data is loaded from cache
-  Future<void> _loadCachedData(String?storage) async {
+  Future<void> _loadCachedData(String? storage) async {
     final cachedData = storage;
 
     if (cachedData != null && cachedData.isNotEmpty) {
@@ -294,9 +300,11 @@ class _CalendarPageState extends State<CalendarPage> {
         print("Processing event: ${event[1]} from $startDate to $endDate");
 
         // Iterate through the range of dates from start to end
-        for (var date = startDate;
-            date.isBefore(endDate.add(Duration(days: 1)));
-            date = date.add(Duration(days: 1))) {
+        for (
+          var date = startDate;
+          date.isBefore(endDate.add(Duration(days: 1)));
+          date = date.add(Duration(days: 1))
+        ) {
           if (eventMap.containsKey(date)) {
             eventMap[date]?.add(event);
           } else {
@@ -366,85 +374,93 @@ class _CalendarPageState extends State<CalendarPage> {
 
         // If phone numbers are found, list them and add copy/WhatsApp functionality
         if (phoneNumbers.isNotEmpty)
-          ...phoneNumbers.map(
-            (phoneNumber) {
-              // Clean the phone number (remove non-numeric characters except '+')
-              String cleanPhoneNumber =
-                  phoneNumber!.replaceAll(RegExp(r'[^\d+]'), '');
+          ...phoneNumbers.map((phoneNumber) {
+            // Clean the phone number (remove non-numeric characters except '+')
+            String cleanPhoneNumber = phoneNumber!.replaceAll(
+              RegExp(r'[^\d+]'),
+              '',
+            );
 
-              // Check if the phone number has at least 8 digits
-              if (cleanPhoneNumber.length >= 8) {
-                // Replace '020' at the start of the phone number with '+85620'
-                if (cleanPhoneNumber.startsWith('020')) {
-                  cleanPhoneNumber =
-                      cleanPhoneNumber.replaceFirst('020', '+85620');
-                }
-
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    Text(cleanPhoneNumber),
-
-                    // Copy to clipboard icon
-                    IconButton(
-                      icon: Icon(Icons.copy),
-                      onPressed: () {
-                        // Copy the phone number to the clipboard
-                        Clipboard.setData(
-                            ClipboardData(text: cleanPhoneNumber));
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content:
-                              Text('$cleanPhoneNumber copied to clipboard'),
-                        ));
-                      },
-                    ),
-
-                    // WhatsApp icon
-                    IconButton(
-                      icon: Icon(Icons.phone),
-                      onPressed: () async {
-                        final whatsappUrl = 'https://wa.me/$cleanPhoneNumber';
-                        if (await canLaunch(whatsappUrl)) {
-                          await launch(whatsappUrl);
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text(
-                                'Could not open WhatsApp for $cleanPhoneNumber'),
-                          ));
-                        }
-                      },
-                    ),
-                  ],
+            // Check if the phone number has at least 8 digits
+            if (cleanPhoneNumber.length >= 8) {
+              // Replace '020' at the start of the phone number with '+85620'
+              if (cleanPhoneNumber.startsWith('020')) {
+                cleanPhoneNumber = cleanPhoneNumber.replaceFirst(
+                  '020',
+                  '+85620',
                 );
-              } else {
-                return Container(); // Do not show anything if the number is too short
               }
-            },
-          ),
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  Text(cleanPhoneNumber),
+
+                  // Copy to clipboard icon
+                  IconButton(
+                    icon: Icon(Icons.copy),
+                    onPressed: () {
+                      // Copy the phone number to the clipboard
+                      Clipboard.setData(ClipboardData(text: cleanPhoneNumber));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '$cleanPhoneNumber copied to clipboard',
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  // WhatsApp icon
+                  IconButton(
+                    icon: Icon(Icons.phone),
+                    onPressed: () async {
+                      final whatsappUrl = 'https://wa.me/$cleanPhoneNumber';
+                      if (await canLaunch(whatsappUrl)) {
+                        await launch(whatsappUrl);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Could not open WhatsApp for $cleanPhoneNumber',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              );
+            } else {
+              return Container(); // Do not show anything if the number is too short
+            }
+          }),
       ],
     );
   }
 
-// Helper function to check if the event is before or ongoing from the current date
+  // Helper function to check if the event is before or ongoing from the current date
   bool isBeforeEndDate(String startDateStr, String endDateStr) {
     DateTime currentDate = DateTime.now();
     DateFormat dateFormat = DateFormat('dd/MM/yyyy');
 
     try {
-      DateTime endDate =
-          dateFormat.parse(endDateStr.isNotEmpty ? endDateStr : startDateStr);
+      DateTime endDate = dateFormat.parse(
+        endDateStr.isNotEmpty ? endDateStr : startDateStr,
+      );
 
       // Show the image if current date is before or on the end date
-      return currentDate.isBefore(endDate
-          .add(Duration(days: 1))); // Extend end date by 1 day for inclusivity
-
+      return currentDate.isBefore(
+        endDate.add(Duration(days: 1)),
+      ); // Extend end date by 1 day for inclusivity
     } catch (e) {
       print('Error parsing date: $e');
       return false; // If there's an error parsing, consider it inactive/expired.
     }
   }
 
-//  filter both _data and imageUrls to only include the ones where the event is active based on start and end dates.
+  //  filter both _data and imageUrls to only include the ones where the event is active based on start and end dates.
   List<String> getActiveImages(List<List<dynamic>> data, List<String> images) {
     List<String> activeImages = [];
 
@@ -466,8 +482,9 @@ class _CalendarPageState extends State<CalendarPage> {
 
       // Check if the event is still relevant (i.e., not expired based on end date)
       if (isBeforeEndDate(startDateStr, endDateStr)) {
-        activeImages.add(images[
-            i]); // Include the image if the event is valid (future or current)
+        activeImages.add(
+          images[i],
+        ); // Include the image if the event is valid (future or current)
       }
     }
 
@@ -514,10 +531,7 @@ class _CalendarPageState extends State<CalendarPage> {
             },
           ),
         ),
-        title: Text(
-          'ປະຕິທິນທັມ',
-          style: TextStyle(fontSize: 18),
-        ),
+        title: Text('ປະຕິທິນທັມ', style: TextStyle(fontSize: 18)),
         actions: [
           IconButton(
             icon: const Icon(Icons.share, color: Colors.white),
@@ -628,7 +642,6 @@ class _CalendarPageState extends State<CalendarPage> {
                   //           },
                   //         ),
                   // ),
-
                   SizedBox(height: 10),
 
                   // TableCalendar with Events
@@ -678,20 +691,23 @@ class _CalendarPageState extends State<CalendarPage> {
                   // Event List Container
                   Container(
                     height: isMobile ? deviceHeight * 0.4 : deviceHeight * 0.7,
-                    child: _selectedDay == null ||
+                    child:
+                        _selectedDay == null ||
                             _getEventsForDay(_selectedDay!).isEmpty
                         ? Center(child: Text('No events for this day'))
                         : ListView.builder(
                             itemCount: _getEventsForDay(_selectedDay!).length,
                             itemBuilder: (context, index) {
-                              final event =
-                                  _getEventsForDay(_selectedDay!)[index];
+                              final event = _getEventsForDay(
+                                _selectedDay!,
+                              )[index];
 
                               return LayoutBuilder(
                                 builder: (context, constraints) {
                                   // Determine device width
-                                  final deviceWidth =
-                                      MediaQuery.of(context).size.width;
+                                  final deviceWidth = MediaQuery.of(
+                                    context,
+                                  ).size.width;
 
                                   final bool isTablet =
                                       deviceWidth >= 600 && deviceWidth < 1024;
@@ -700,21 +716,23 @@ class _CalendarPageState extends State<CalendarPage> {
                                   return ListTile(
                                     leading:
                                         event[0] != null && event[0].isNotEmpty
-                                            ? Image.network(event[0])
-                                            : Icon(Icons.event,
-                                                size: isDesktop
-                                                    ? 60
-                                                    : isTablet
-                                                        ? 45
-                                                        : 30),
+                                        ? Image.network(event[0])
+                                        : Icon(
+                                            Icons.event,
+                                            size: isDesktop
+                                                ? 60
+                                                : isTablet
+                                                ? 45
+                                                : 30,
+                                          ),
                                     title: Text(
                                       event[1], // Event title
                                       style: TextStyle(
                                         fontSize: isDesktop
                                             ? 20
                                             : isTablet
-                                                ? 16
-                                                : 14, // Adjust font size based on device type
+                                            ? 16
+                                            : 14, // Adjust font size based on device type
                                       ),
                                     ),
                                     subtitle: Column(
@@ -728,8 +746,8 @@ class _CalendarPageState extends State<CalendarPage> {
                                             fontSize: isDesktop
                                                 ? 16
                                                 : isTablet
-                                                    ? 14
-                                                    : 12,
+                                                ? 14
+                                                : 12,
                                           ),
                                         ),
 
@@ -757,9 +775,11 @@ class _CalendarPageState extends State<CalendarPage> {
                                                     child: Container(
                                                       constraints:
                                                           BoxConstraints(
-                                                        maxWidth: imageWidth,
-                                                        maxHeight: imageHeight,
-                                                      ),
+                                                            maxWidth:
+                                                                imageWidth,
+                                                            maxHeight:
+                                                                imageHeight,
+                                                          ),
                                                       child: InteractiveViewer(
                                                         minScale:
                                                             0.5, // Minimum zoom-out scale (reduce size by 50%)
@@ -770,13 +790,14 @@ class _CalendarPageState extends State<CalendarPage> {
                                                           onTap: () {
                                                             // Open full-screen image viewer when the image is tapped
                                                             Navigator.of(
-                                                                    context)
-                                                                .push(
+                                                              context,
+                                                            ).push(
                                                               MaterialPageRoute(
                                                                 builder: (context) =>
                                                                     FullScreenImageView(
-                                                                        imageUrl:
-                                                                            event[0]),
+                                                                      imageUrl:
+                                                                          event[0],
+                                                                    ),
                                                               ),
                                                             );
                                                           },
@@ -800,7 +821,8 @@ class _CalendarPageState extends State<CalendarPage> {
                                                   Column(
                                                     children: [
                                                       _renderEventDetails(
-                                                          event[4]),
+                                                        event[4],
+                                                      ),
                                                     ],
                                                   )
                                                 else
@@ -831,9 +853,11 @@ class _CalendarPageState extends State<CalendarPage> {
                                                           onTap: () async {
                                                             // Open Google Maps with the event location when the map is clicked using url_lunch
                                                             if (await canLaunch(
-                                                                event[6])) {
+                                                              event[6],
+                                                            )) {
                                                               await launch(
-                                                                  event[6]);
+                                                                event[6],
+                                                              );
                                                             }
                                                           },
                                                           child: Image.network(
@@ -842,16 +866,18 @@ class _CalendarPageState extends State<CalendarPage> {
                                                             fit: BoxFit.contain,
                                                             width: constraints
                                                                 .maxWidth,
-                                                            errorBuilder: (context,
-                                                                    error,
-                                                                    stackTrace) =>
-                                                                Text(
-                                                              'Map not available. Click the link below for location.',
-                                                              style: TextStyle(
-                                                                color:
-                                                                    Colors.red,
-                                                              ),
-                                                            ),
+                                                            errorBuilder:
+                                                                (
+                                                                  context,
+                                                                  error,
+                                                                  stackTrace,
+                                                                ) => Text(
+                                                                  'Map not available. Click the link below for location.',
+                                                                  style: TextStyle(
+                                                                    color: Colors
+                                                                        .red,
+                                                                  ),
+                                                                ),
                                                           ),
                                                         ),
                                                       ),
@@ -864,27 +890,27 @@ class _CalendarPageState extends State<CalendarPage> {
                                                             InkWell(
                                                               onTap: () async {
                                                                 if (await canLaunch(
-                                                                    event[6])) {
+                                                                  event[6],
+                                                                )) {
                                                                   await launch(
-                                                                      event[6]);
+                                                                    event[6],
+                                                                  );
                                                                 }
                                                               },
                                                               child: // Location description text with a clickable link
-                                                                  InkWell(
-                                                                onTap:
-                                                                    () async {
+                                                              InkWell(
+                                                                onTap: () async {
                                                                   if (await canLaunch(
-                                                                      event[
-                                                                          6])) {
+                                                                    event[6],
+                                                                  )) {
                                                                     await launch(
-                                                                        event[
-                                                                            6]);
+                                                                      event[6],
+                                                                    );
                                                                   }
                                                                 },
                                                                 child: Text(
                                                                   'ສະຖານທີ່ 1: ${event[6]}', // Event Location
-                                                                  style:
-                                                                      TextStyle(
+                                                                  style: TextStyle(
                                                                     color: Colors
                                                                         .blue,
                                                                     decoration:
@@ -902,27 +928,27 @@ class _CalendarPageState extends State<CalendarPage> {
                                                             InkWell(
                                                               onTap: () async {
                                                                 if (await canLaunch(
-                                                                    event[7])) {
+                                                                  event[7],
+                                                                )) {
                                                                   await launch(
-                                                                      event[7]);
+                                                                    event[7],
+                                                                  );
                                                                 }
                                                               },
                                                               child: // Location description text with a clickable link
-                                                                  InkWell(
-                                                                onTap:
-                                                                    () async {
+                                                              InkWell(
+                                                                onTap: () async {
                                                                   if (await canLaunch(
-                                                                      event[
-                                                                          7])) {
+                                                                    event[7],
+                                                                  )) {
                                                                     await launch(
-                                                                        event[
-                                                                            7]);
+                                                                      event[7],
+                                                                    );
                                                                   }
                                                                 },
                                                                 child: Text(
                                                                   'ສະຖານທີ່ 2: ${event[7]}', // Event Location
-                                                                  style:
-                                                                      TextStyle(
+                                                                  style: TextStyle(
                                                                     color: Colors
                                                                         .blue,
                                                                     decoration:
@@ -940,27 +966,27 @@ class _CalendarPageState extends State<CalendarPage> {
                                                             InkWell(
                                                               onTap: () async {
                                                                 if (await canLaunch(
-                                                                    event[8])) {
+                                                                  event[8],
+                                                                )) {
                                                                   await launch(
-                                                                      event[8]);
+                                                                    event[8],
+                                                                  );
                                                                 }
                                                               },
                                                               child: // Location description text with a clickable link
-                                                                  InkWell(
-                                                                onTap:
-                                                                    () async {
+                                                              InkWell(
+                                                                onTap: () async {
                                                                   if (await canLaunch(
-                                                                      event[
-                                                                          8])) {
+                                                                    event[8],
+                                                                  )) {
                                                                     await launch(
-                                                                        event[
-                                                                            8]);
+                                                                      event[8],
+                                                                    );
                                                                   }
                                                                 },
                                                                 child: Text(
                                                                   'ສະຖານທີ່ 3: ${event[8]}', // Event Location
-                                                                  style:
-                                                                      TextStyle(
+                                                                  style: TextStyle(
                                                                     color: Colors
                                                                         .blue,
                                                                     decoration:
@@ -978,27 +1004,27 @@ class _CalendarPageState extends State<CalendarPage> {
                                                             InkWell(
                                                               onTap: () async {
                                                                 if (await canLaunch(
-                                                                    event[9])) {
+                                                                  event[9],
+                                                                )) {
                                                                   await launch(
-                                                                      event[9]);
+                                                                    event[9],
+                                                                  );
                                                                 }
                                                               },
                                                               child: // Location description text with a clickable link
-                                                                  InkWell(
-                                                                onTap:
-                                                                    () async {
+                                                              InkWell(
+                                                                onTap: () async {
                                                                   if (await canLaunch(
-                                                                      event[
-                                                                          9])) {
+                                                                    event[9],
+                                                                  )) {
                                                                     await launch(
-                                                                        event[
-                                                                            9]);
+                                                                      event[9],
+                                                                    );
                                                                   }
                                                                 },
                                                                 child: Text(
                                                                   'ສະຖານທີ່ 4: ${event[9]}', // Event Location
-                                                                  style:
-                                                                      TextStyle(
+                                                                  style: TextStyle(
                                                                     color: Colors
                                                                         .blue,
                                                                     decoration:
@@ -1016,27 +1042,27 @@ class _CalendarPageState extends State<CalendarPage> {
                                                             InkWell(
                                                               onTap: () async {
                                                                 if (await canLaunch(
-                                                                    event[5])) {
+                                                                  event[5],
+                                                                )) {
                                                                   await launch(
-                                                                      event[5]);
+                                                                    event[5],
+                                                                  );
                                                                 }
                                                               },
                                                               child: // Location description text with a clickable link
-                                                                  InkWell(
-                                                                onTap:
-                                                                    () async {
+                                                              InkWell(
+                                                                onTap: () async {
                                                                   if (await canLaunch(
-                                                                      event[
-                                                                          5])) {
+                                                                    event[5],
+                                                                  )) {
                                                                     await launch(
-                                                                        event[
-                                                                            5]);
+                                                                      event[5],
+                                                                    );
                                                                   }
                                                                 },
                                                                 child: Text(
                                                                   'Social Page: ${event[5]}', // Event Location
-                                                                  style:
-                                                                      TextStyle(
+                                                                  style: TextStyle(
                                                                     color: Colors
                                                                         .blue,
                                                                     decoration:
@@ -1073,7 +1099,8 @@ class _CalendarPageState extends State<CalendarPage> {
                                                     if (event[0] != null &&
                                                         event[0].isNotEmpty) {
                                                       // Share image and description when event[0] is available
-                                                      final url = 'https://buddhaword.free.nf/calendar';
+                                                      final url =
+                                                          'https://buddhaword-web.hf.space/calendar';
                                                       Share.share(
                                                         '${event[1]}\n\n Poster: ${event[0]}\n\n ລາຍລະອຽດ: ${event[4]}\n\n' +
                                                             (event[6] != '/'
@@ -1193,28 +1220,36 @@ class _FullScreenImagePageViewState extends State<FullScreenImagePageView> {
                 child: Image.network(
                   imageUrl.isEmpty ? 'assets/wisdom.jpg' : imageUrl,
                   fit: BoxFit.contain,
-                  loadingBuilder: (BuildContext context, Widget child,
-                      ImageChunkEvent? loadingProgress) {
-                    if (loadingProgress == null) {
-                      return child;
-                    } else {
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                              : null,
-                        ),
-                      );
-                    }
-                  },
-                  errorBuilder: (BuildContext context, Object error,
-                      StackTrace? stackTrace) {
-                    return Image.asset(
-                      'assets/wisdom.jpg',
-                      fit: BoxFit.contain,
-                    );
-                  },
+                  loadingBuilder:
+                      (
+                        BuildContext context,
+                        Widget child,
+                        ImageChunkEvent? loadingProgress,
+                      ) {
+                        if (loadingProgress == null) {
+                          return child;
+                        } else {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                        loadingProgress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        }
+                      },
+                  errorBuilder:
+                      (
+                        BuildContext context,
+                        Object error,
+                        StackTrace? stackTrace,
+                      ) {
+                        return Image.asset(
+                          'assets/wisdom.jpg',
+                          fit: BoxFit.contain,
+                        );
+                      },
                 ),
               ),
             ),
@@ -1279,28 +1314,32 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
             child: Image.network(
               widget.imageUrl.isEmpty ? 'assets/wisdom.jpg' : widget.imageUrl,
               fit: BoxFit.contain,
-              loadingBuilder: (BuildContext context, Widget child,
-                  ImageChunkEvent? loadingProgress) {
-                if (loadingProgress == null) {
-                  return child;
-                } else {
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                    ),
-                  );
-                }
-              },
+              loadingBuilder:
+                  (
+                    BuildContext context,
+                    Widget child,
+                    ImageChunkEvent? loadingProgress,
+                  ) {
+                    if (loadingProgress == null) {
+                      return child;
+                    } else {
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                              : null,
+                        ),
+                      );
+                    }
+                  },
               errorBuilder:
                   (BuildContext context, Object error, StackTrace? stackTrace) {
-                return Image.asset(
-                  'assets/wisdom.jpg',
-                  fit: BoxFit.contain,
-                );
-              },
+                    return Image.asset(
+                      'assets/wisdom.jpg',
+                      fit: BoxFit.contain,
+                    );
+                  },
             ),
           ),
         ),

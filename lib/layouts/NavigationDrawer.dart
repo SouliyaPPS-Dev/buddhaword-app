@@ -68,26 +68,34 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
   }
 
   void _openLinkVideo() async {
-    if (await canLaunch('https://buddhaword.free.nf/video')) {
-      await launch('https://buddhaword.free.nf/video');
+    if (await canLaunch('https://buddhaword-web.hf.space/video')) {
+      await launch('https://buddhaword-web.hf.space/video');
     } else {
-      throw 'Could not launch https://buddhaword.free.nf/video';
+      throw 'Could not launch https://buddhaword-web.hf.space/video';
     }
   }
 
   void _openLinkCalendar() async {
-    if (await canLaunch('https://buddhaword.free.nf/calendar')) {
-      await launch('https://buddhaword.free.nf/calendar');
+    if (await canLaunch('https://buddhaword-web.hf.space/calendar')) {
+      await launch('https://buddhaword-web.hf.space/calendar');
     } else {
-      throw 'Could not launch https://buddhaword.free.nf/calendar';
+      throw 'Could not launch https://buddhaword-web.hf.space/calendar';
     }
   }
 
   void _openLinkBooks() async {
-    if (await canLaunch('https://buddhaword.free.nf/book')) {
-      await launch('https://buddhaword.free.nf/book');
+    if (await canLaunch('https://buddhaword-web.hf.space/book')) {
+      await launch('https://buddhaword-web.hf.space/book');
     } else {
-      throw 'Could not launch https://buddhaword.free.nf/book';
+      throw 'Could not launch https://buddhaword-web.hf.space/book';
+    }
+  }
+
+  void _openLinkSearchBooks() async {
+    if (await canLaunch('https://buddhaword-web.hf.space/search-books')) {
+      await launch('https://buddhaword-web.hf.space/search-books');
+    } else {
+      throw 'Could not launch https://buddhaword-web.hf.space/search-books';
     }
   }
 
@@ -637,6 +645,22 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 24),
           leading: _isChecked
+              ? Icon(Icons.search, color: _checkColor)
+              : Icon(Icons.search, color: _checkColor),
+          title: const Text(
+            'ຄົ້ນຫາປຶ້ມ',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
+          onTap: () => _openLinkSearchBooks(),
+        ),
+        SizedBox(height: 8),
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+          leading: _isChecked
               ? Icon(Icons.favorite, color: _checkColor)
               : Icon(Icons.favorite, color: _checkColor),
           title: const Text(
@@ -665,6 +689,7 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
           ),
           onTap: () => _openLinkBooks(),
         ),
+
         SizedBox(height: 8),
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 24),

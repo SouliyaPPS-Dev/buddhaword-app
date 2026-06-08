@@ -515,7 +515,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
   int _findNextValidAudioIndex(int currentIndex) {
     for (int i = currentIndex + 1; i < _filteredData.length; i++) {
-      final audio = _filteredData[i].length > 5 ? _filteredData[i][5].toString() : '';
+      final audio = _filteredData[i].length > 5
+          ? _filteredData[i][5].toString()
+          : '';
       if (audio.isNotEmpty && audio != '/') {
         return i;
       }
@@ -525,7 +527,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
   int _findPreviousValidAudioIndex(int currentIndex) {
     for (int i = currentIndex - 1; i >= 0; i--) {
-      final audio = _filteredData[i].length > 5 ? _filteredData[i][5].toString() : '';
+      final audio = _filteredData[i].length > 5
+          ? _filteredData[i][5].toString()
+          : '';
       if (audio.isNotEmpty && audio != '/') {
         return i;
       }
@@ -557,16 +561,16 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   // void _openLinkVideo() async {
-  //   if (await canLaunch('https://buddhaword.free.nf/video')) {
-  //     await launch('https://buddhaword.free.nf/video');
+  //   if (await canLaunch('https://buddhaword-web.hf.space/video')) {
+  //     await launch('https://buddhaword-web.hf.space/video');
   //   } else {
   //     throw 'Could not launch';
   //   }
   // }
 
   // void _openLinkCalendar() async {
-  //   if (await canLaunch('https://buddhaword.free.nf/calendar')) {
-  //     await launch('https://buddhaword.free.nf/calendar');
+  //   if (await canLaunch('https://buddhaword-web.hf.space/calendar')) {
+  //     await launch('https://buddhaword-web.hf.space/calendar');
   //   } else {
   //     throw 'Could not launch';
   //   }
@@ -906,9 +910,15 @@ class _MyHomePageState extends State<MyHomePage> {
                           itemCount: _filteredData.length,
                           itemBuilder: (context, index) {
                             final rowData = _filteredData[index];
-                            final id = rowData.isNotEmpty ? rowData[0].toString() : '';
-                            final title = rowData.length > 1 ? rowData[1].toString() : '';
-                            final audio = rowData.length > 5 ? rowData[5].toString() : '/';
+                            final id = rowData.isNotEmpty
+                                ? rowData[0].toString()
+                                : '';
+                            final title = rowData.length > 1
+                                ? rowData[1].toString()
+                                : '';
+                            final audio = rowData.length > 5
+                                ? rowData[5].toString()
+                                : '/';
 
                             return Card(
                               elevation: 8,

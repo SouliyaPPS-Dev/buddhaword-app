@@ -77,13 +77,17 @@ class _BooksPageState extends State<BooksPage> {
   }
 
   Future<void> fetchDataFromAPI(String searchTerm) async {
-    bool hasInternet =
-        !(await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
+    bool hasInternet = !(await Connectivity().checkConnectivity()).contains(
+      ConnectivityResult.none,
+    );
 
     try {
       if (hasInternet) {
-        final response = await http.get(Uri.parse(
-            'https://sheets.googleapis.com/v4/spreadsheets/1mKtgmZ_Is4e6P3P5lvOwIplqx7VQ3amicgienGN9zwA/values/books!1:1000000?key=AIzaSyDFjIl-SEHUsgK0sjMm7x0awpf8tTEPQjs'));
+        final response = await http.get(
+          Uri.parse(
+            'https://sheets.googleapis.com/v4/spreadsheets/1mKtgmZ_Is4e6P3P5lvOwIplqx7VQ3amicgienGN9zwA/values/books!1:1000000?key=AIzaSyDFjIl-SEHUsgK0sjMm7x0awpf8tTEPQjs',
+          ),
+        );
 
         if (response.statusCode == 200) {
           final Map<String, dynamic> jsonResponse = json.decode(response.body);
@@ -107,8 +111,9 @@ class _BooksPageState extends State<BooksPage> {
       }
     } catch (e) {
       if (!hasInternet) {
-        final cachedDataLocal =
-            await getFromSharedPreferences('booksLocalData');
+        final cachedDataLocal = await getFromSharedPreferences(
+          'booksLocalData',
+        );
         if (cachedDataLocal != null && cachedDataLocal.isNotEmpty) {
           final List<dynamic> cachedValues = json.decode(cachedDataLocal);
           _data = cachedValues.cast<List<dynamic>>();
@@ -116,8 +121,9 @@ class _BooksPageState extends State<BooksPage> {
           return; // Return here to avoid further execution
         }
       } else {
-        final cachedDataLocal =
-            await getFromSharedPreferences('booksLocalData');
+        final cachedDataLocal = await getFromSharedPreferences(
+          'booksLocalData',
+        );
         if (cachedDataLocal != null && cachedDataLocal.isNotEmpty) {
           final List<dynamic> cachedValues = json.decode(cachedDataLocal);
           _data = cachedValues.cast<List<dynamic>>();
@@ -143,8 +149,9 @@ class _BooksPageState extends State<BooksPage> {
   }
 
   Future<void> fetchDataOffline(String searchTerm) async {
-    bool hasInternet =
-        !(await Connectivity().checkConnectivity()).contains(ConnectivityResult.none);
+    bool hasInternet = !(await Connectivity().checkConnectivity()).contains(
+      ConnectivityResult.none,
+    );
 
     final cachedDataLocal = await getFromSharedPreferences('booksLocalData');
 
@@ -174,8 +181,9 @@ class _BooksPageState extends State<BooksPage> {
       }
     } catch (e) {
       if (!hasInternet) {
-        final cachedDataLocal =
-            await getFromSharedPreferences('booksLocalData');
+        final cachedDataLocal = await getFromSharedPreferences(
+          'booksLocalData',
+        );
         if (cachedDataLocal != null && cachedDataLocal.isNotEmpty) {
           final List<dynamic> cachedValues = json.decode(cachedDataLocal);
           _data = cachedValues.cast<List<dynamic>>();
@@ -184,8 +192,9 @@ class _BooksPageState extends State<BooksPage> {
           return; // Return here to avoid further execution
         }
       } else {
-        final cachedDataLocal =
-            await getFromSharedPreferences('booksLocalData');
+        final cachedDataLocal = await getFromSharedPreferences(
+          'booksLocalData',
+        );
         if (cachedDataLocal != null && cachedDataLocal.isNotEmpty) {
           final List<dynamic> cachedValues = json.decode(cachedDataLocal);
           _data = cachedValues.cast<List<dynamic>>();
@@ -214,13 +223,18 @@ class _BooksPageState extends State<BooksPage> {
   void updateData(String searchTerm, String selectedCategory) {
     List<List<dynamic>> filteredData = _data
         .where((row) {
-          return row.any((cell) =>
-              cell.toString().toLowerCase().contains(searchTerm.toLowerCase()));
+          return row.any(
+            (cell) => cell.toString().toLowerCase().contains(
+              searchTerm.toLowerCase(),
+            ),
+          );
         })
         .where((row) => row.isNotEmpty && row[0] != '0')
-        .where((row) =>
-            selectedCategory.isEmpty ||
-            row.length > 2 && row[2] == selectedCategory)
+        .where(
+          (row) =>
+              selectedCategory.isEmpty ||
+              row.length > 2 && row[2] == selectedCategory,
+        )
         .toList();
 
     filteredData = filteredData;
@@ -231,7 +245,7 @@ class _BooksPageState extends State<BooksPage> {
   }
 
   void _shareAllBooksLink() {
-    const url = 'https://buddhaword.free.nf/book';
+    const url = 'https://buddhaword-web.hf.space/book';
 
     String? title = 'ປື້ມ & ເເຜນຜັງ';
 
@@ -265,7 +279,8 @@ class _BooksPageState extends State<BooksPage> {
                     height: 20.0, // Custom height
                     child: CircularProgressIndicator(
                       valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.white), // Change color here
+                        Colors.white,
+                      ), // Change color here
                       strokeWidth: 2.0, // Optional: change the stroke width
                     ),
                   )
@@ -324,270 +339,289 @@ class _BooksPageState extends State<BooksPage> {
       drawer: const custom_nav.NavigationDrawer(),
       body: _data.isEmpty
           ? RandomImagePage()
-          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Container(
-                constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context)
-                        .size
-                        .width), // Constrain width of the row
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: TextField(
-                        controller: _searchController,
-                        style:
-                            const TextStyle(fontSize: 17.0, letterSpacing: 0.5),
-                        decoration: InputDecoration(
-                          hintText: 'ຄົ້ນຫາ...',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () {
-                                    setState(() {
-                                      _searchController.clear();
-                                      _searchTerm = '';
-                                      fetchData(_searchTerm);
-                                    });
-                                  },
-                                )
-                              : null,
-                        ),
-                        onChanged: (value) {
-                          setState(() {
-                            _searchTerm = value;
-                            fetchData(_searchTerm);
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                    Expanded(
-                      flex: 1,
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedCategory.isNotEmpty
-                            ? _selectedCategory
-                            : null,
-                        decoration: InputDecoration(
-                          hintText: 'ໝວດ',
-                          suffixIcon: _selectedCategory.isNotEmpty
-                              ? Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        _selectedCategory, // Display selected category value
-                                        textAlign: TextAlign.end,
-                                        style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.grey[600],
-                                            letterSpacing: 0.5),
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: () {
-                                        setState(() {
-                                          _selectedCategory = '';
-                                          if (_searchTerm.isEmpty) {
-                                            updateData(
-                                                _searchTerm, _selectedCategory);
-                                          } else {
-                                            fetchData(_searchTerm);
-                                          }
-                                        });
-                                      },
-                                    ),
-                                  ],
-                                )
-                              : null,
-                        ),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _selectedCategory = newValue ?? '';
-                            if (_searchTerm.isEmpty) {
-                              updateData(_searchTerm, _selectedCategory);
-                            } else {
-                              fetchData(_searchTerm);
-                            }
-                          });
-                        },
-                        items: _data.isEmpty
-                            ? null
-                            : _data
-                                .map((row) =>
-                                    row.length > 2 ? row[2].toString() : '')
-                                .toSet()
-                                .toList()
-                                .map<DropdownMenuItem<String>>((String value) {
-                                return DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value),
-                                );
-                              }).toList(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Adjust the grid layout based on screen width
-                    int crossAxisCount;
-                    double childAspectRatio;
-
-                    if (constraints.maxWidth >= 1200) {
-                      // Desktop layout
-                      crossAxisCount = 6;
-                      childAspectRatio = 0.7;
-                    } else if (constraints.maxWidth >= 800) {
-                      // Tablet layout
-                      crossAxisCount = 4;
-                      childAspectRatio = 0.7;
-                    } else {
-                      // Mobile layout with 3 items per row
-                      crossAxisCount = 3;
-                      childAspectRatio = 0.65;
-                    }
-
-                    return _filteredData.isEmpty
-                        ? RandomImagePage()
-                        : Container(
-                            width: double.infinity, // Full width
-                            decoration: BoxDecoration(
-                              image: DecorationImage(
-                                image: AssetImage(
-                                    'assets/wooden_background.jpg'), // Your wooden background image
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12.0),
-                              child: GridView.builder(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  childAspectRatio: childAspectRatio,
-                                  crossAxisSpacing: 10,
-                                  mainAxisSpacing: 10,
-                                ),
-                                itemCount: _filteredData.length,
-                                itemBuilder: (context, index) {
-                                  final book = _filteredData[index];
-                                  final title = book.isNotEmpty
-                                      ? book[1]
-                                      : 'Unknown Title';
-                                  final coverImageUrl = book.length > 1
-                                      ? book[5]
-                                        : 'assets/default_image_old.jpg';
-
-                                  final linkOpen = book.length > 1
-                                      ? book[4]
-                                      : 'https://drive.google.com/drive/u/0/folders/1z6vIdR-fzXxxhCM-rjqq8F7ZHLNlP5E3';
-
-                                  return GestureDetector(
-                                    onTap: () async {
-                                      if (await canLaunch(linkOpen)) {
-                                        await launch(linkOpen);
-                                      } else {
-                                        throw 'Could not launch $linkOpen';
-                                      }
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width,
+                  ), // Constrain width of the row
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: _searchController,
+                          style: const TextStyle(
+                            fontSize: 17.0,
+                            letterSpacing: 0.5,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'ຄົ້ນຫາ...',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      setState(() {
+                                        _searchController.clear();
+                                        _searchTerm = '';
+                                        fetchData(_searchTerm);
+                                      });
                                     },
-                                    child: Column(
-                                      children: [
-                                        Expanded(
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withOpacity(0.2),
-                                                  spreadRadius: 2,
-                                                  blurRadius: 6,
-                                                  offset: Offset(0, 3),
-                                                ),
-                                              ],
-                                              borderRadius:
-                                                  BorderRadius.circular(8.0),
-                                              border: Border.all(
-                                                color: Colors.grey.shade300,
-                                                width: 1.0,
-                                              ),
-                                            ),
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(8.0),
-                                              child: Image.network(
-                                                coverImageUrl,
-                                                fit: BoxFit.cover,
-                                                loadingBuilder:
-                                                    (BuildContext context,
-                                                        Widget child,
-                                                        ImageChunkEvent?
-                                                            loadingProgress) {
-                                                  if (loadingProgress == null) {
-                                                    return child;
-                                                  } else {
-                                                    return Center(
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                        value: loadingProgress
-                                                                    .expectedTotalBytes !=
-                                                                null
-                                                            ? loadingProgress
-                                                                    .cumulativeBytesLoaded /
-                                                                (loadingProgress
-                                                                        .expectedTotalBytes ??
-                                                                    1)
-                                                            : null,
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                                errorBuilder: (BuildContext
-                                                        context,
-                                                    Object exception,
-                                                    StackTrace? stackTrace) {
-                                                  return Image.asset(
-                                                          'assets/default_image_old.jpg',
-                                                        ); // A local placeholder image
-                                                },
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(height: 5),
-                                        Text(
-                                          title,
-                                          textAlign: TextAlign.center,
+                                  )
+                                : null,
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              _searchTerm = value;
+                              fetchData(_searchTerm);
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        flex: 1,
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedCategory.isNotEmpty
+                              ? _selectedCategory
+                              : null,
+                          decoration: InputDecoration(
+                            hintText: 'ໝວດ',
+                            suffixIcon: _selectedCategory.isNotEmpty
+                                ? Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _selectedCategory, // Display selected category value
+                                          textAlign: TextAlign.end,
                                           style: TextStyle(
                                             fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors
-                                                .white, // Changed to white to stand out more
-                                            shadows: [
-                                              Shadow(
-                                                offset: Offset(1.5, 1.5),
-                                                blurRadius: 3.0,
-                                                color: Colors.black.withOpacity(
-                                                    0.5), // Dark shadow to enhance readability
-                                              ),
-                                            ],
+                                            color: Colors.grey[600],
+                                            letterSpacing: 0.5,
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          );
-                  },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.clear),
+                                        onPressed: () {
+                                          setState(() {
+                                            _selectedCategory = '';
+                                            if (_searchTerm.isEmpty) {
+                                              updateData(
+                                                _searchTerm,
+                                                _selectedCategory,
+                                              );
+                                            } else {
+                                              fetchData(_searchTerm);
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  )
+                                : null,
+                          ),
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              _selectedCategory = newValue ?? '';
+                              if (_searchTerm.isEmpty) {
+                                updateData(_searchTerm, _selectedCategory);
+                              } else {
+                                fetchData(_searchTerm);
+                              }
+                            });
+                          },
+                          items: _data.isEmpty
+                              ? null
+                              : _data
+                                    .map(
+                                      (row) => row.length > 2
+                                          ? row[2].toString()
+                                          : '',
+                                    )
+                                    .toSet()
+                                    .toList()
+                                    .map<DropdownMenuItem<String>>((
+                                      String value,
+                                    ) {
+                                      return DropdownMenuItem<String>(
+                                        value: value,
+                                        child: Text(value),
+                                      );
+                                    })
+                                    .toList(),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ]),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Adjust the grid layout based on screen width
+                      int crossAxisCount;
+                      double childAspectRatio;
+
+                      if (constraints.maxWidth >= 1200) {
+                        // Desktop layout
+                        crossAxisCount = 6;
+                        childAspectRatio = 0.7;
+                      } else if (constraints.maxWidth >= 800) {
+                        // Tablet layout
+                        crossAxisCount = 4;
+                        childAspectRatio = 0.7;
+                      } else {
+                        // Mobile layout with 3 items per row
+                        crossAxisCount = 3;
+                        childAspectRatio = 0.65;
+                      }
+
+                      return _filteredData.isEmpty
+                          ? RandomImagePage()
+                          : Container(
+                              width: double.infinity, // Full width
+                              decoration: BoxDecoration(
+                                image: DecorationImage(
+                                  image: AssetImage(
+                                    'assets/wooden_background.jpg',
+                                  ), // Your wooden background image
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: GridView.builder(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: crossAxisCount,
+                                        childAspectRatio: childAspectRatio,
+                                        crossAxisSpacing: 10,
+                                        mainAxisSpacing: 10,
+                                      ),
+                                  itemCount: _filteredData.length,
+                                  itemBuilder: (context, index) {
+                                    final book = _filteredData[index];
+                                    final title = book.isNotEmpty
+                                        ? book[1]
+                                        : 'Unknown Title';
+                                    final coverImageUrl = book.length > 1
+                                        ? book[5]
+                                        : 'assets/default_image_old.jpg';
+
+                                    final linkOpen = book.length > 1
+                                        ? book[4]
+                                        : 'https://drive.google.com/drive/u/0/folders/1z6vIdR-fzXxxhCM-rjqq8F7ZHLNlP5E3';
+
+                                    return GestureDetector(
+                                      onTap: () async {
+                                        if (await canLaunch(linkOpen)) {
+                                          await launch(linkOpen);
+                                        } else {
+                                          throw 'Could not launch $linkOpen';
+                                        }
+                                      },
+                                      child: Column(
+                                        children: [
+                                          Expanded(
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.black
+                                                        .withOpacity(0.2),
+                                                    spreadRadius: 2,
+                                                    blurRadius: 6,
+                                                    offset: Offset(0, 3),
+                                                  ),
+                                                ],
+                                                borderRadius:
+                                                    BorderRadius.circular(8.0),
+                                                border: Border.all(
+                                                  color: Colors.grey.shade300,
+                                                  width: 1.0,
+                                                ),
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8.0),
+                                                child: Image.network(
+                                                  coverImageUrl,
+                                                  fit: BoxFit.cover,
+                                                  loadingBuilder:
+                                                      (
+                                                        BuildContext context,
+                                                        Widget child,
+                                                        ImageChunkEvent?
+                                                        loadingProgress,
+                                                      ) {
+                                                        if (loadingProgress ==
+                                                            null) {
+                                                          return child;
+                                                        } else {
+                                                          return Center(
+                                                            child: CircularProgressIndicator(
+                                                              value:
+                                                                  loadingProgress
+                                                                          .expectedTotalBytes !=
+                                                                      null
+                                                                  ? loadingProgress
+                                                                            .cumulativeBytesLoaded /
+                                                                        (loadingProgress.expectedTotalBytes ??
+                                                                            1)
+                                                                  : null,
+                                                            ),
+                                                          );
+                                                        }
+                                                      },
+                                                  errorBuilder:
+                                                      (
+                                                        BuildContext context,
+                                                        Object exception,
+                                                        StackTrace? stackTrace,
+                                                      ) {
+                                                        return Image.asset(
+                                                          'assets/default_image_old.jpg',
+                                                        ); // A local placeholder image
+                                                      },
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(height: 5),
+                                          Text(
+                                            title,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors
+                                                  .white, // Changed to white to stand out more
+                                              shadows: [
+                                                Shadow(
+                                                  offset: Offset(1.5, 1.5),
+                                                  blurRadius: 3.0,
+                                                  color: Colors.black.withOpacity(
+                                                    0.5,
+                                                  ), // Dark shadow to enhance readability
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            );
+                    },
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
