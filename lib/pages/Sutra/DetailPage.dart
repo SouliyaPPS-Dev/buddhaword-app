@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
@@ -53,6 +54,9 @@ class _DetailPageState extends State<DetailPage> {
   bool _isFullScreen = false;
   bool _playerReady = false;
   bool _isLoadingAudio = false;
+
+  final FlutterTts _tts = FlutterTts();
+  bool _isTtsSpeaking = false;
 
   bool get _isDarkMode => context.watch<ThemeProvider>().isDarkMode;
 
@@ -208,16 +212,6 @@ class _DetailPageState extends State<DetailPage> {
         _isLoadingAudio = false;
       });
     }
-  }
-
-  @override
-  void dispose() {
-    _playerStateSubscription?.cancel();
-    _durationSubscription?.cancel();
-    _positionSubscription?.cancel();
-    _player.dispose();
-    _pageController.dispose();
-    super.dispose();
   }
 
   void _disposeAudioPlayer() {
@@ -511,6 +505,12 @@ class _DetailPageState extends State<DetailPage> {
                 _buildFAB(Icons.content_copy, _copyContentToClipboard, 'fab3'),
                 const SizedBox(width: 12),
                 _buildFAB(Icons.share, _shareDetailLink, 'fab4'),
+                const SizedBox(width: 12),
+                _buildFAB(
+                  _isTtsSpeaking ? Icons.stop : Icons.volume_up,
+                  _speakContent,
+                  'fab5',
+                ),
               ],
             ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -782,6 +782,99 @@ class _DetailPageState extends State<DetailPage> {
       parseContent(context, text.substring(lastIndex), fontSize, _isDarkMode),
     );
     return spans;
+  }
+
+  String _detectLanguage(String text) {
+    int laoCount = 0, thaiCount = 0, engCount = 0;
+    for (final rune in text.runes) {
+      if (rune >= 0x0E80 && rune <= 0x0EFF) {
+        laoCount++;
+      } else if (rune >= 0x0E00 && rune <= 0x0E7F) {
+        thaiCount++;
+      } else if ((rune >= 0x41 && rune <= 0x5A) || (rune >= 0x61 && rune <= 0x7A)) {
+        engCount++;
+      }
+    }
+    if (laoCount > thaiCount && laoCount > engCount) return 'lo-LA';
+    if (thaiCount > laoCount && thaiCount > engCount) return 'th-TH';
+    return 'en-US';
+  }
+
+  Future<void> _setBestVoice(String lang) async {
+    try {
+      final available = await _tts.isLanguageAvailable(lang);
+      if (available == true) {
+        await _tts.setLanguage(lang);
+        return;
+      }
+      final voices = await _tts.getVoices;
+      if (voices is List && voices.isNotEmpty) {
+        for (final v in voices) {
+          if (v is Map && v['locale'] == lang) {
+            await _tts.setVoice(Map<String, String>.from(v));
+            return;
+          }
+        }
+        final langPrefix = lang.split('-')[0];
+        for (final v in voices) {
+          if (v is Map) {
+            final locale = v['locale']?.toString() ?? '';
+            if (locale.startsWith(langPrefix)) {
+              await _tts.setVoice(Map<String, String>.from(v));
+              return;
+            }
+          }
+        }
+        if (lang == 'lo-LA') {
+          for (final v in voices) {
+            if (v is Map) {
+              final locale = v['locale']?.toString() ?? '';
+              if (locale.startsWith('th')) {
+                await _tts.setVoice(Map<String, String>.from(v));
+                return;
+              }
+            }
+          }
+        }
+      }
+      await _tts.setLanguage(lang);
+    } catch (_) {
+      try { await _tts.setLanguage(lang); } catch (_) {}
+    }
+  }
+
+  Future<void> _speakContent() async {
+    if (_isTtsSpeaking) {
+      await _tts.stop();
+      setState(() => _isTtsSpeaking = false);
+      return;
+    }
+    final item = widget.items[_currentIndex];
+    String content = await _fetchData(item['details']);
+    content = content.replaceAll(RegExp(r'<\/?b>'), '');
+    final lang = _detectLanguage(content);
+    await _setBestVoice(lang);
+    await _tts.setPitch(0.85);
+    await _tts.setSpeechRate(0.45);
+    _tts.setCompletionHandler(() {
+      if (mounted) setState(() => _isTtsSpeaking = false);
+    });
+    _tts.setErrorHandler((_) {
+      if (mounted) setState(() => _isTtsSpeaking = false);
+    });
+    await _tts.speak(content);
+    setState(() => _isTtsSpeaking = true);
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    _playerStateSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _positionSubscription?.cancel();
+    _player.dispose();
+    _pageController.dispose();
+    super.dispose();
   }
 
   void _shareDetailLink() {

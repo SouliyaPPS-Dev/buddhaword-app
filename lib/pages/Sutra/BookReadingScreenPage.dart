@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
@@ -60,6 +61,9 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
   StreamSubscription<Duration>? _positionSubscription;
 
   bool hasInternet = false;
+
+  final FlutterTts _tts = FlutterTts();
+  bool _isTtsSpeaking = false;
 
   // check if the current theme is dark or not
   bool? isDarkMode;
@@ -209,6 +213,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
 
   @override
   void dispose() {
+    _tts.stop();
     _disposeAudioPlayer();
 
     _themeCheckTimer?.cancel();
@@ -876,23 +881,119 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
             ),
           ),
           const SizedBox(width: 12),
-          SizedBox(
-            width: 48, // Adjusted width for custom size
-            height: 48, // Adjusted height for custom size
-            child: FloatingActionButton(
-              heroTag: 'fab4',
-              onPressed: _shareDetailLink,
-              backgroundColor: const Color(0xFFF5F5F5),
-              child: const Icon(
-                Icons.share,
-                size: 24, // Optional: Adjust icon size if needed
-                color: Color.fromARGB(241, 179, 93, 78),
+            SizedBox(
+              width: 48, // Adjusted width for custom size
+              height: 48, // Adjusted height for custom size
+              child: FloatingActionButton(
+                heroTag: 'fab4',
+                onPressed: _shareDetailLink,
+                backgroundColor: const Color(0xFFF5F5F5),
+                child: const Icon(
+                  Icons.share,
+                  size: 24, // Optional: Adjust icon size if needed
+                  color: Color.fromARGB(241, 179, 93, 78),
+                ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: FloatingActionButton(
+                heroTag: 'fab5',
+                onPressed: _speakContent,
+                backgroundColor: const Color(0xFFF5F5F5),
+                child: Icon(
+                  _isTtsSpeaking ? Icons.stop : Icons.volume_up,
+                  size: 24,
+                  color: const Color.fromARGB(241, 179, 93, 78),
+                ),
+              ),
+            ),
+          ],
       ),
     );
+  }
+
+  String _detectLanguage(String text) {
+    int laoCount = 0, thaiCount = 0, engCount = 0;
+    for (final rune in text.runes) {
+      if (rune >= 0x0E80 && rune <= 0x0EFF) {
+        laoCount++;
+      } else if (rune >= 0x0E00 && rune <= 0x0E7F) {
+        thaiCount++;
+      } else if ((rune >= 0x41 && rune <= 0x5A) || (rune >= 0x61 && rune <= 0x7A)) {
+        engCount++;
+      }
+    }
+    if (laoCount > thaiCount && laoCount > engCount) return 'lo-LA';
+    if (thaiCount > laoCount && thaiCount > engCount) return 'th-TH';
+    return 'en-US';
+  }
+
+  Future<void> _setBestVoice(String lang) async {
+    try {
+      final available = await _tts.isLanguageAvailable(lang);
+      if (available == true) {
+        await _tts.setLanguage(lang);
+        return;
+      }
+      final voices = await _tts.getVoices;
+      if (voices is List && voices.isNotEmpty) {
+        for (final v in voices) {
+          if (v is Map && v['locale'] == lang) {
+            await _tts.setVoice(Map<String, String>.from(v));
+            return;
+          }
+        }
+        final langPrefix = lang.split('-')[0];
+        for (final v in voices) {
+          if (v is Map) {
+            final locale = v['locale']?.toString() ?? '';
+            if (locale.startsWith(langPrefix)) {
+              await _tts.setVoice(Map<String, String>.from(v));
+              return;
+            }
+          }
+        }
+        if (lang == 'lo-LA') {
+          for (final v in voices) {
+            if (v is Map) {
+              final locale = v['locale']?.toString() ?? '';
+              if (locale.startsWith('th')) {
+                await _tts.setVoice(Map<String, String>.from(v));
+                return;
+              }
+            }
+          }
+        }
+      }
+      await _tts.setLanguage(lang);
+    } catch (_) {
+      try { await _tts.setLanguage(lang); } catch (_) {}
+    }
+  }
+
+  Future<void> _speakContent() async {
+    if (_isTtsSpeaking) {
+      await _tts.stop();
+      setState(() => _isTtsSpeaking = false);
+      return;
+    }
+    String content = await _fetchData(getCurrentDetail());
+    content = content.replaceAll(RegExp(r'<\/?b>'), '');
+    final lang = _detectLanguage(content);
+    await _setBestVoice(lang);
+    await _tts.setPitch(0.85);
+    await _tts.setSpeechRate(0.45);
+    _tts.setCompletionHandler(() {
+      if (mounted) setState(() => _isTtsSpeaking = false);
+    });
+    _tts.setErrorHandler((_) {
+      if (mounted) setState(() => _isTtsSpeaking = false);
+    });
+    await _tts.speak(content);
+    setState(() => _isTtsSpeaking = true);
   }
 
   void _shareDetailLink() {
