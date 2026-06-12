@@ -64,7 +64,12 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
   bool hasInternet = false;
 
   static const String _ttsBaseUrl = 'https://buddhaword-web.hf.space';
+  static const int _ttsChunkSize = 1200;
+  static const int _maxTtsChars = 50000;
   bool _isTtsSpeaking = false;
+  bool _isTtsLoading = false;
+  final List<Uint8List> _ttsChunkBytes = [];
+  int _ttsRunId = 0;
 
   // check if the current theme is dark or not
   bool? isDarkMode;
@@ -214,6 +219,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
 
   @override
   void dispose() {
+    _ttsRunId++;
     _disposeAudioPlayer();
 
     _themeCheckTimer?.cancel();
@@ -260,9 +266,11 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
   }
 
   void _onPageChanged(int index) {
+    _ttsRunId++;
     setState(() {
       _currentPageIndex = index;
       _isTtsSpeaking = false;
+      _isTtsLoading = false;
     });
     _loadFavoriteState();
 
@@ -846,72 +854,82 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
               backgroundColor: const Color(0xFFF5F5F5),
               child: const Icon(
                 Icons.add,
-                size: 24, // Optional: Adjust icon size if needed
+                size: 24,
                 color: Color.fromARGB(241, 179, 93, 78),
               ),
             ),
           ),
           const SizedBox(width: 12),
           SizedBox(
-            width: 48, // Adjusted width for custom size
-            height: 48, // Adjusted height for custom size
+            width: 48,
+            height: 48,
             child: FloatingActionButton(
               heroTag: 'fab2',
               onPressed: _decreaseFontSize,
               backgroundColor: const Color(0xFFF5F5F5),
               child: const Icon(
                 Icons.remove,
-                size: 24, // Optional: Adjust icon size if needed
+                size: 24,
                 color: Color.fromARGB(241, 179, 93, 78),
               ),
             ),
           ),
           const SizedBox(width: 12),
           SizedBox(
-            width: 48, // Adjusted width for custom size
-            height: 48, // Adjusted height for custom size
+            width: 48,
+            height: 48,
             child: FloatingActionButton(
               heroTag: 'fab3',
               onPressed: _copyContentToClipboard,
               backgroundColor: const Color(0xFFF5F5F5),
               child: const Icon(
                 Icons.content_copy,
-                size: 24, // Optional: Adjust icon size if needed
+                size: 24,
                 color: Color.fromARGB(241, 179, 93, 78),
               ),
             ),
           ),
           const SizedBox(width: 12),
-            SizedBox(
-              width: 48, // Adjusted width for custom size
-              height: 48, // Adjusted height for custom size
-              child: FloatingActionButton(
-                heroTag: 'fab4',
-                onPressed: _shareDetailLink,
-                backgroundColor: const Color(0xFFF5F5F5),
-                child: const Icon(
-                  Icons.share,
-                  size: 24, // Optional: Adjust icon size if needed
-                  color: Color.fromARGB(241, 179, 93, 78),
-                ),
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: FloatingActionButton(
+              heroTag: 'fab4',
+              onPressed: _shareDetailLink,
+              backgroundColor: const Color(0xFFF5F5F5),
+              child: const Icon(
+                Icons.share,
+                size: 24,
+                color: Color.fromARGB(241, 179, 93, 78),
               ),
             ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 48,
-              height: 48,
-              child: FloatingActionButton(
-                heroTag: 'fab5',
-                onPressed: _speakContent,
-                backgroundColor: const Color(0xFFF5F5F5),
-                child: Icon(
-                  _isTtsSpeaking ? Icons.stop : Icons.volume_up,
-                  size: 24,
-                  color: const Color.fromARGB(241, 179, 93, 78),
-                ),
-              ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: FloatingActionButton(
+              heroTag: 'fab5',
+              onPressed: _isTtsLoading ? null : _speakContent,
+              backgroundColor: _isTtsSpeaking ? Colors.brown : const Color(0xFFF5F5F5),
+              child: _isTtsLoading
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.brown,
+                      ),
+                    )
+                  : Icon(
+                      _isTtsSpeaking ? Icons.stop : Icons.volume_up,
+                      color: _isTtsSpeaking
+                          ? Colors.white
+                          : const Color.fromARGB(241, 179, 93, 78),
+                    ),
             ),
-          ],
+          ),
+        ],
       ),
     );
   }
@@ -932,67 +950,179 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
     return 'en-US';
   }
 
-  Future<void> _speakContent() async {
-    if (_isTtsSpeaking) {
-      setState(() => _isTtsSpeaking = false);
-      return;
+  List<String> _chunkText(String text) {
+    if (text.length <= _ttsChunkSize) return [text];
+    final chunks = <String>[];
+    int start = 0;
+    while (start < text.length) {
+      int end = start + _ttsChunkSize;
+      if (end >= text.length) {
+        chunks.add(text.substring(start).trim());
+        break;
+      }
+      int breakAt = end;
+      for (int i = end; i > start + _ttsChunkSize - 200 && i > start; i--) {
+        if ('.!?:\n'.contains(text[i])) {
+          breakAt = i + 1;
+          break;
+        }
+      }
+      chunks.add(text.substring(start, breakAt).trim());
+      start = breakAt;
     }
-    String content = await _fetchData(getCurrentDetail());
-    content = content.replaceAll(RegExp(r'<\/?b>'), '');
+    return chunks.where((c) => c.isNotEmpty).toList();
+  }
 
+  Future<File?> _fetchTtsChunk(int index, String text) async {
     try {
+      final lang = _detectLanguage(text);
       final response = await http.post(
         Uri.parse('$_ttsBaseUrl/api/tts/synthesize'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'text': content,
-          'language': _detectLanguage(content),
-        }),
+        body: json.encode({'text': text, 'language': lang}),
       );
-
-      if (response.statusCode != 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('TTS error: ${response.statusCode}')),
-          );
-        }
-        return;
-      }
-
+      if (response.statusCode != 200) return null;
       final data = json.decode(response.body);
-      if (data['error'] == true) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['message'] ?? 'TTS failed')),
-          );
-        }
-        return;
-      }
-
+      if (data['error'] == true) return null;
       final audioBytes = base64.decode(data['audioContent']);
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/tts_${DateTime.now().millisecondsSinceEpoch}.mp3');
+      final file = File(
+        '${dir.path}/tts_${index}_${DateTime.now().millisecondsSinceEpoch}.mp3',
+      );
       await file.writeAsBytes(audioBytes);
+      return file;
+    } catch (_) {
+      return null;
+    }
+  }
 
-      _disposeAudioPlayer();
-      await _player.setFilePath(file.path);
-
-      _playerStateSubscription?.cancel();
-      _playerStateSubscription = _player.playerStateStream.listen((playerState) {
-        if (mounted) {
-          setState(() {
-            _isTtsSpeaking = playerState.playing;
-          });
-        }
-      });
-
-      await _player.play();
-      if (mounted) setState(() => _isTtsSpeaking = true);
-    } catch (e) {
+  Future<void> _speakContent() async {
+    if (_isTtsSpeaking || _isTtsLoading) {
+      _ttsRunId++;
+      _player.stop();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('TTS error: $e')),
-        );
+        setState(() {
+          _isTtsSpeaking = false;
+          _isTtsLoading = false;
+        });
+      }
+      return;
+    }
+
+    String content = await _fetchData(getCurrentDetail());
+    content = content.replaceAll(RegExp(r'<\/?b>'), '');
+    if (content.length > _maxTtsChars) {
+      content = content.substring(0, _maxTtsChars);
+    }
+
+    final chunks = _chunkText(content);
+    if (chunks.isEmpty) return;
+
+    _ttsRunId++;
+    final runId = _ttsRunId;
+    _ttsChunkBytes.clear();
+
+    if (mounted) {
+      setState(() {
+        _isTtsSpeaking = true;
+        _isTtsLoading = true;
+        _position = Duration.zero;
+        _duration = Duration.zero;
+      });
+    }
+
+    _playerStateSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _positionSubscription?.cancel();
+
+    _playerStateSubscription = _player.playerStateStream.listen((playerState) {
+      if (mounted) {
+        setState(() {
+          _isTtsSpeaking = playerState.playing;
+        });
+      }
+    });
+    _durationSubscription = _player.durationStream.listen((duration) {
+      if (mounted) setState(() => _duration = duration ?? Duration.zero);
+    });
+    _positionSubscription = _player.positionStream.listen((position) {
+      if (mounted) setState(() => _position = position);
+    });
+
+    // Fetch and play first chunk
+    File? file = await _fetchTtsChunk(0, chunks[0]);
+    if (file == null || runId != _ttsRunId || !mounted) {
+      if (mounted) {
+        setState(() {
+          _isTtsSpeaking = false;
+          _isTtsLoading = false;
+        });
+      }
+      return;
+    }
+    _ttsChunkBytes.add(await file.readAsBytes());
+    await _player.stop();
+    await _player.setFilePath(file.path);
+    await _player.setSpeed(0.85);
+    await _player.play();
+    try {
+      await file.delete();
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() => _isTtsLoading = false);
+    }
+
+    // Process remaining chunks: prefetch next while current plays
+    for (int i = 1; i < chunks.length; i++) {
+      if (runId != _ttsRunId || !mounted) break;
+
+      Future<File?> prefetch = _fetchTtsChunk(i, chunks[i]);
+
+      try {
+        final state = _player.processingState;
+        if (state != ProcessingState.completed &&
+            state != ProcessingState.idle) {
+          await _player.processingStateStream.firstWhere(
+            (s) =>
+                s == ProcessingState.completed || s == ProcessingState.idle,
+          );
+        }
+      } catch (_) {
+        break;
+      }
+
+      if (runId != _ttsRunId || !mounted) break;
+
+      file = await prefetch;
+      if (file == null) break;
+
+      _ttsChunkBytes.add(await file.readAsBytes());
+      await _player.setFilePath(file.path);
+      await _player.setSpeed(0.85);
+      await _player.play();
+      try {
+        await file.delete();
+      } catch (_) {}
+    }
+
+    // Wait for last chunk to finish
+    if (mounted && runId == _ttsRunId) {
+      try {
+        final state = _player.processingState;
+        if (state != ProcessingState.completed &&
+            state != ProcessingState.idle) {
+          await _player.processingStateStream.firstWhere(
+            (s) =>
+                s == ProcessingState.completed || s == ProcessingState.idle,
+          );
+        }
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _isTtsSpeaking = false;
+          _isTtsLoading = false;
+        });
       }
     }
   }

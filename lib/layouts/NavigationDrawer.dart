@@ -12,6 +12,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../main.dart';
 import '../pages/Books/BooksPage.dart';
 import '../pages/Sutra/ContactInfoPage.dart';
+import '../pages/Sutra/AnakameSutraPage.dart';
+import '../pages/Sutra/UttayarndhamPage.dart';
+import '../pages/Sutra/EtipitakaPage.dart';
 import '../pages/Sutra/FavoritePage.dart';
 import '../pages/Video/VideoPage.dart';
 
@@ -689,7 +692,6 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
           ),
           onTap: () => _openLinkBooks(),
         ),
-
         SizedBox(height: 8),
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 24),
@@ -737,6 +739,69 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
             ),
           ),
           onTap: () => _openLinkCalendar(),
+        ),
+        SizedBox(height: 8),
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+          leading: _isChecked
+              ? Icon(Icons.search, color: _checkColor)
+              : Icon(Icons.search_outlined, color: _checkColor),
+          title: const Text(
+            'E-Tipitaka',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
+          onTap: () => {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => EtipitakaSearchPage()),
+            ),
+          },
+        ),
+        SizedBox(height: 8),
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+          leading: _isChecked
+              ? Icon(Icons.menu_book, color: _checkColor)
+              : Icon(Icons.menu_book_outlined, color: _checkColor),
+          title: const Text(
+            'Anakame (ภาษาไทย)',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
+          onTap: () => {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => AnakameSutraPage()),
+            ),
+          },
+        ),
+        SizedBox(height: 8),
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+          leading: _isChecked
+              ? Icon(Icons.library_books, color: _checkColor)
+              : Icon(Icons.library_books_outlined, color: _checkColor),
+          title: const Text(
+            'Uttayarndham (ธรรมะ)',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
+          onTap: () => {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => UttayarndhamPage()),
+            ),
+          },
         ),
         SizedBox(height: 8),
         ListTile(

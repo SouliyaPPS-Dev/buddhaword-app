@@ -1,0 +1,398 @@
+// ignore_for_file: file_names, library_private_types_in_public_api, prefer_const_constructors, deprecated_member_use
+
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+
+import '../../themes/ThemeProvider.dart';
+import 'UttayarndhamContentPage.dart';
+
+class UttayarndhamItem {
+  final String title;
+  final String url;
+
+  UttayarndhamItem({required this.title, required this.url});
+}
+
+class UttayarndhamPage extends StatefulWidget {
+  const UttayarndhamPage({super.key});
+
+  @override
+  _UttayarndhamPageState createState() => _UttayarndhamPageState();
+}
+
+class _UttayarndhamPageState extends State<UttayarndhamPage> {
+  static const String _baseUrl = 'https://uttayarndham.org';
+  static const int _pageSize = 20;
+
+  List<UttayarndhamItem> _allItems = [];
+  List<UttayarndhamItem> _filteredItems = [];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _isSearching = false;
+  bool _hasMore = true;
+  String? _error;
+  int _currentPage = 0;
+  int _searchRunId = 0;
+
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  String _searchQuery = '';
+  Timer? _searchDebounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _fetchPage(0);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchController.dispose();
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoadingMore &&
+        _hasMore &&
+        _searchQuery.isEmpty) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadMore() {
+    final nextPage = _currentPage + 1;
+    return _fetchPage(nextPage);
+  }
+
+  Future<void> _fetchPage(int page) async {
+    final isInitial = page == 0;
+    setState(() {
+      if (isInitial) {
+        _isLoading = true;
+      } else {
+        _isLoadingMore = true;
+      }
+      _error = null;
+    });
+    try {
+      final url = page == 0
+          ? '$_baseUrl/dhamma-sharing'
+          : '$_baseUrl/dhamma-sharing?page=$page';
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final items = _parseListing(response.body);
+        if (mounted) {
+          setState(() {
+            if (isInitial) {
+              _allItems = items;
+            } else {
+              _allItems.addAll(items);
+            }
+            if (items.length < _pageSize) {
+              _hasMore = false;
+            }
+            _filteredItems = List.from(_allItems);
+            _currentPage = page;
+            _isLoading = false;
+            _isLoadingMore = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _error = 'Failed to load (${response.statusCode})';
+            _isLoading = false;
+            _isLoadingMore = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Error: $e';
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+      }
+    }
+  }
+
+  void _onSearch(String query) {
+    _searchDebounce?.cancel();
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredItems = List.from(_allItems);
+        _isSearching = false;
+      } else {
+        _filteredItems = _allItems
+            .where(
+              (item) => item.title.toLowerCase().contains(query.toLowerCase()),
+            )
+            .toList();
+        if (_hasMore) {
+          _isSearching = true;
+          _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+            _searchAllPages(query);
+          });
+        }
+      }
+    });
+  }
+
+  Future<void> _searchAllPages(String query) async {
+    final runId = ++_searchRunId;
+    final lowerQuery = query.toLowerCase();
+
+    for (int page = _currentPage + 1; page <= 100 && _hasMore; page++) {
+      if (runId != _searchRunId || _searchQuery.isEmpty) break;
+      try {
+        final url = '$_baseUrl/dhamma-sharing?page=$page';
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode != 200) break;
+        final items = _parseListing(response.body);
+        if (items.length < _pageSize) _hasMore = false;
+        if (runId != _searchRunId || _searchQuery.isEmpty) break;
+        if (mounted) {
+          setState(() {
+            _allItems.addAll(items);
+            final matches = items
+                .where((item) =>
+                    item.title.toLowerCase().contains(lowerQuery))
+                .toList();
+            _filteredItems.addAll(matches);
+            _currentPage = page;
+          });
+        }
+      } catch (_) {
+        break;
+      }
+    }
+    if (mounted && runId == _searchRunId) {
+      setState(() => _isSearching = false);
+    }
+  }
+
+  List<TextSpan> _highlightText(String text, String query) {
+    if (query.isEmpty) return [TextSpan(text: text)];
+    final spans = <TextSpan>[];
+    final lower = text.toLowerCase();
+    final qLower = query.toLowerCase();
+    int start = 0;
+    int idx = lower.indexOf(qLower, start);
+    while (idx != -1) {
+      if (idx > start) {
+        spans.add(TextSpan(text: text.substring(start, idx)));
+      }
+      spans.add(TextSpan(
+        text: text.substring(idx, idx + query.length),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.orange.shade800,
+          backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+        ),
+      ));
+      start = idx + query.length;
+      idx = lower.indexOf(qLower, start);
+    }
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start)));
+    }
+    return spans;
+  }
+
+  List<UttayarndhamItem> _parseListing(String html) {
+    final results = <UttayarndhamItem>[];
+    final itemRegex = RegExp(
+      r'<h4><a\s+href="\s+(/[^"]+)"[^>]*>([^<]+)</a></h4>',
+      dotAll: true,
+    );
+    for (final m in itemRegex.allMatches(html)) {
+      final href = m.group(1)!.trim();
+      final title = m.group(2)!.trim();
+      results.add(UttayarndhamItem(title: title, url: href));
+    }
+    return results;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.brown,
+        title: Text(
+          'Uttayarndham (ธรรมะ)',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+            color: Colors.white,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        actions: [
+          Consumer<ThemeProvider>(
+            builder: (context, themeProvider, child) {
+              return IconButton(
+                icon: Text(
+                  themeProvider.isDarkMode ? "☀️" : "🌙",
+                  style: const TextStyle(fontSize: 16),
+                ),
+                onPressed: () =>
+                    themeProvider.toggleTheme(!themeProvider.isDarkMode),
+              );
+            },
+          ),
+        ],
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, style: TextStyle(color: Colors.red)),
+            SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _fetchPage(_currentPage),
+              child: Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: TextField(
+            controller: _searchController,
+            onChanged: _onSearch,
+            style: TextStyle(color: isDark ? Colors.grey[100] : Colors.grey[900]),
+            decoration: InputDecoration(
+              hintText: 'Search...',
+              hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+              prefixIcon: Icon(Icons.search, color: isDark ? Colors.brown[200] : Colors.brown),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(Icons.clear, color: isDark ? Colors.brown[200] : Colors.brown),
+                      onPressed: () {
+                        _searchController.clear();
+                        _onSearch('');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+            ),
+          ),
+        ),
+        if (_filteredItems.isEmpty && !_isLoadingMore && !_isSearching)
+          Expanded(child: Center(child: Text('No items found')))
+        else if (_filteredItems.isEmpty && _isSearching)
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.brown,
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                  Text('Searching...'),
+                ],
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: ListView.separated(
+              controller: _scrollController,
+              itemCount: _filteredItems.length + (_isLoadingMore || _isSearching ? 1 : 0),
+              separatorBuilder: (context, index) => Divider(height: 1),
+              itemBuilder: (context, index) {
+                if (index == _filteredItems.length) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.brown,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                final item = _filteredItems[index];
+                return ListTile(
+                  title: RichText(
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                        color: isDark ? Colors.grey[100] : Colors.grey[900],
+                      ),
+                      children: [
+                        TextSpan(text: '${index + 1}. '),
+                        ..._highlightText(item.title, _searchQuery),
+                      ],
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: Colors.brown),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => UttayarndhamContentPage(
+                          title: item.title,
+                          contentUrl: '$_baseUrl${item.url}',
+                          items: _filteredItems,
+                          itemIndex: index,
+                          searchQuery: _searchQuery,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}

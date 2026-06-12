@@ -11,7 +11,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
@@ -61,6 +60,9 @@ class _DetailPageState extends State<DetailPage> {
   static const int _ttsChunkSize = 1200;
 
   _AudioMode _audioMode = _AudioMode.none;
+
+  final List<Uint8List> _ttsChunkBytes = [];
+  int _ttsRunId = 0;
 
   bool get _isDarkMode => context.watch<ThemeProvider>().isDarkMode;
 
@@ -141,6 +143,7 @@ class _DetailPageState extends State<DetailPage> {
       _positionSubscription?.cancel();
 
       await _player.setFilePath(file.path);
+      await _player.setSpeed(1.0);
       _playerStateSubscription = _player.playerStateStream.listen((
         playerState,
       ) {
@@ -193,6 +196,7 @@ class _DetailPageState extends State<DetailPage> {
 
   Future<void> _setupDirectAudio(String audioUrl) async {
     await _player.stop();
+    await _player.setSpeed(1.0);
     await _player.setUrl(audioUrl);
     _playerStateSubscription?.cancel();
     _playerStateSubscription = _player.playerStateStream.listen((playerState) {
@@ -242,6 +246,25 @@ class _DetailPageState extends State<DetailPage> {
 
   Future<void> _playPauseAudio() async {
     final audioUrl = _getAudioUrl();
+    final bool hasAudio = audioUrl != '/' && audioUrl.isNotEmpty;
+
+    // If no audio URL, just stop TTS if active and return
+    if (!hasAudio) {
+      if (_audioMode == _AudioMode.tts) {
+        await _player.stop();
+        if (mounted) {
+          setState(() {
+            _audioMode = _AudioMode.none;
+            _isPlaying = false;
+            _playerReady = false;
+            _position = Duration.zero;
+            _duration = Duration.zero;
+            _isLoadingAudio = false;
+          });
+        }
+      }
+      return;
+    }
 
     // If TTS is active, stop it and start audio
     if (_audioMode == _AudioMode.tts) {
@@ -322,31 +345,69 @@ class _DetailPageState extends State<DetailPage> {
     ].join(':');
   }
 
-  Future<void> _downloadAudio(String urlAudio) async {
-    if (_isYouTubeAudio(urlAudio)) {
-      if (await canLaunch(urlAudio)) {
-        await launch(urlAudio);
-      }
-      return;
-    }
+  Future<void> _downloadAudio(String audioUrl) async {
     try {
-      final response = await http.get(Uri.parse(urlAudio));
-      if (response.statusCode == 200) {
-        final dir = await getApplicationDocumentsDirectory();
-        final fileName = urlAudio.split('/').last;
-        final file = File('${dir.path}/$fileName');
-        await file.writeAsBytes(response.bodyBytes);
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Downloaded: $fileName')));
+      Uint8List audioData;
+      String fileName;
+
+      // 1) TTS bytes
+      if (_ttsChunkBytes.isNotEmpty) {
+        final int totalLength = _ttsChunkBytes.fold(0, (sum, b) => sum + b.length);
+        final Uint8List allBytes = Uint8List(totalLength);
+        int offset = 0;
+        for (final bytes in _ttsChunkBytes) {
+          allBytes.setRange(offset, offset + bytes.length, bytes);
+          offset += bytes.length;
         }
+        audioData = allBytes;
+        final item = widget.items[_currentIndex];
+        fileName = '${item['title'] ?? 'tts_audio'}.mp3';
+      }
+      // 2) Audio URL
+      else if (audioUrl != '/') {
+        final response = await http.get(Uri.parse(audioUrl));
+        if (response.statusCode != 200) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Download failed: server error')),
+            );
+          }
+          return;
+        }
+        audioData = response.bodyBytes;
+        fileName = audioUrl.split('/').last;
+        if (!fileName.contains('.')) fileName = '$fileName.mp3';
+      }
+      // 3) Nothing to download
+      else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No audio to download. Play TTS first.')),
+          );
+        }
+        return;
+      }
+
+      // Save to documents directory
+      final dir = await getApplicationDocumentsDirectory();
+      final String downloadDir = '${dir.path}/Downloads';
+      final Directory downloadFolder = Directory(downloadDir);
+      if (!await downloadFolder.exists()) {
+        await downloadFolder.create(recursive: true);
+      }
+      final File file = File('$downloadDir/$fileName');
+      await file.writeAsBytes(audioData);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Downloaded: $fileName')),
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Download failed')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download failed: $e')),
+        );
       }
     }
   }
@@ -388,6 +449,7 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   void _onPageChanged(int index) {
+    _ttsRunId++;
     _player.stop();
     setState(() {
       _currentIndex = index;
@@ -557,15 +619,7 @@ class _DetailPageState extends State<DetailPage> {
                 const SizedBox(width: 12),
                 _buildFAB(Icons.share, _shareDetailLink, 'fab4'),
                 const SizedBox(width: 12),
-                _buildFAB(
-                  _isLoadingAudio
-                      ? Icons.hourglass_top
-                      : _audioMode == _AudioMode.tts
-                          ? Icons.stop
-                          : Icons.volume_up,
-                  _speakContent,
-                  'fab5',
-                ),
+                _buildVolumeFab(),
               ],
             ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -585,6 +639,35 @@ class _DetailPageState extends State<DetailPage> {
     );
   }
 
+  Widget _buildVolumeFab() {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: FloatingActionButton(
+        heroTag: 'fab_volume',
+        onPressed: _isLoadingAudio ? null : _speakContent,
+        backgroundColor: _audioMode == _AudioMode.tts
+            ? Colors.brown
+            : const Color(0xFFF5F5F5),
+        child: _isLoadingAudio
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.brown,
+                ),
+              )
+            : Icon(
+                _audioMode == _AudioMode.tts ? Icons.stop : Icons.volume_up,
+                color: _audioMode == _AudioMode.tts
+                    ? Colors.white
+                    : const Color.fromARGB(241, 179, 93, 78),
+              ),
+      ),
+    );
+  }
+
   Widget _buildPageContent(Map<String, dynamic> item) {
     final String audioUrl = _extractUrl(item['audio'] ?? '/');
     final bool hasAudio = audioUrl != '/';
@@ -594,7 +677,7 @@ class _DetailPageState extends State<DetailPage> {
       child: Column(
         children: [
           const SizedBox(height: 10),
-          if (hasAudio) _buildAudioPlayer(audioUrl),
+          if (hasAudio && _audioMode != _AudioMode.tts) _buildAudioPlayer(audioUrl),
           Expanded(
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -624,16 +707,85 @@ class _DetailPageState extends State<DetailPage> {
                       ),
                       const SizedBox(height: 0),
                       _buildSutraContent(item['details']),
-                      const SizedBox(height: 150),
+                      const SizedBox(height: 60),
                     ],
                   ),
                 ),
               ),
             ),
           ),
+          if (_audioMode == _AudioMode.tts || _ttsChunkBytes.isNotEmpty)
+            Container(
+              color: Colors.brown.shade50,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _isPlaying ? Icons.pause : Icons.play_arrow,
+                      color: Colors.brown,
+                    ),
+                    onPressed: () async {
+                      if (_isPlaying) {
+                        await _player.pause();
+                      } else {
+                        await _player.play();
+                      }
+                    },
+                  ),
+                  Expanded(
+                    child: Slider(
+                      min: 0,
+                      max: _duration.inMilliseconds.toDouble().clamp(1, double.infinity),
+                      value: _position.inMilliseconds.toDouble().clamp(0, _duration.inMilliseconds.toDouble()),
+                      onChanged: (v) => _player.seek(Duration(milliseconds: v.toInt())),
+                    ),
+                  ),
+                  Text(
+                    '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
+                    style: TextStyle(fontSize: 11, color: Colors.brown),
+                  ),
+                  SizedBox(width: 4),
+                  if (_ttsChunkBytes.isNotEmpty)
+                    IconButton(
+                      icon: Icon(Icons.download, color: Colors.brown, size: 20),
+                      onPressed: () => _downloadAudio('/'),
+                      constraints: BoxConstraints(minWidth: 36, minHeight: 36),
+                      padding: EdgeInsets.zero,
+                    ),
+                  IconButton(
+                    icon: Icon(Icons.stop, color: Colors.red, size: 20),
+                    onPressed: _stopTts,
+                    constraints: BoxConstraints(minWidth: 36, minHeight: 36),
+                    padding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+
         ],
       ),
     );
+  }
+
+  void _stopTts() {
+    _ttsRunId++;
+    _player.stop();
+    _ttsChunkBytes.clear();
+    setState(() {
+      _audioMode = _AudioMode.none;
+      _isPlaying = false;
+      _playerReady = false;
+      _position = Duration.zero;
+      _duration = Duration.zero;
+      _isLoadingAudio = false;
+    });
+  }
+
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '${d.inHours > 0 ? '${d.inHours}:' : ''}$m:$s';
   }
 
   Widget _buildAudioPlayer(String audioUrl) {
@@ -683,7 +835,7 @@ class _DetailPageState extends State<DetailPage> {
                           ),
                         )
                       : Icon(
-                          _audioMode == _AudioMode.audio && _isPlaying
+                          _isPlaying
                               ? Icons.pause
                               : Icons.play_arrow,
                           color: Colors.white,
@@ -692,10 +844,6 @@ class _DetailPageState extends State<DetailPage> {
                 ),
               ),
               const SizedBox(width: 10),
-              IconButton(
-                icon: const Icon(Icons.download, color: Colors.brown),
-                onPressed: () => _downloadAudio(audioUrl),
-              ),
               IconButton(
                 icon: const Icon(Icons.forward_10, color: Colors.brown),
                 onPressed: () {
@@ -707,34 +855,52 @@ class _DetailPageState extends State<DetailPage> {
                   }
                 },
               ),
+              if (_ttsChunkBytes.isNotEmpty || audioUrl != '/')
+                IconButton(
+                  icon: const Icon(Icons.download, color: Colors.brown),
+                  onPressed: () => _downloadAudio(audioUrl),
+                ),
             ],
           ),
-          if (_audioMode == _AudioMode.audio && (_isPlaying || _position > Duration.zero))
-            Column(
-              children: [
-                Slider(
-                  min: 0.0,
-                  max: _duration.inSeconds.toDouble(),
-                  value: _position.inSeconds.toDouble().clamp(
-                    0.0,
-                    _duration.inSeconds.toDouble(),
-                  ),
-                  onChanged: (value) async {
+          Column(
+            children: [
+              Slider(
+                min: 0.0,
+                max: _duration.inSeconds.toDouble() > 0
+                    ? _duration.inSeconds.toDouble()
+                    : 1.0,
+                value: _position.inSeconds.toDouble().clamp(
+                  0.0,
+                  _duration.inSeconds.toDouble() > 0
+                      ? _duration.inSeconds.toDouble()
+                      : 1.0,
+                ),
+                onChanged: (value) async {
+                  if (_duration > Duration.zero) {
                     await _player.seek(Duration(seconds: value.toInt()));
-                  },
+                  }
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      formatTime(_position),
+                      style: TextStyle(color: Colors.brown),
+                    ),
+                    Text(
+                      _duration > Duration.zero
+                          ? formatTime(_duration - _position)
+                          : '--:--',
+                      style: TextStyle(color: Colors.brown),
+                    ),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(formatTime(_position)),
-                      Text(formatTime(_duration - _position)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -765,11 +931,12 @@ class _DetailPageState extends State<DetailPage> {
                       maxWidth: constraints.maxWidth,
                     ),
                     child: SelectableText.rich(
+                      key: ValueKey(snapshot.data),
                       TextSpan(
                         children: highlightSearchTerm(
                           context,
                           snapshot
-                              .data!, // Fixed: passing fetched content, not URL
+                              .data!,
                           widget.searchTerm,
                           _fontSize,
                         ),
@@ -869,7 +1036,6 @@ class _DetailPageState extends State<DetailPage> {
         chunks.add(text.substring(start).trim());
         break;
       }
-      // Walk back to find a sentence boundary
       int breakAt = end;
       for (int i = end; i > start + _ttsChunkSize - 200 && i > start; i--) {
         if ('.!?:\n'.contains(text[i])) {
@@ -883,10 +1049,34 @@ class _DetailPageState extends State<DetailPage> {
     return chunks.where((c) => c.isNotEmpty).toList();
   }
 
+  Future<File?> _fetchTtsChunk(int index, String text) async {
+    try {
+      final lang = _detectLanguage(text);
+      final response = await http.post(
+        Uri.parse('$_ttsBaseUrl/api/tts/synthesize'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'text': text, 'language': lang}),
+      );
+      if (response.statusCode != 200) return null;
+      final data = json.decode(response.body);
+      if (data['error'] == true) return null;
+      final audioBytes = base64.decode(data['audioContent']);
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/tts_${index}_${DateTime.now().millisecondsSinceEpoch}.mp3',
+      );
+      await file.writeAsBytes(audioBytes);
+      return file;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _speakContent() async {
-    // If TTS is already speaking, stop it
+    // Stop existing TTS
     if (_audioMode == _AudioMode.tts) {
       await _player.stop();
+      _ttsChunkBytes.clear();
       if (mounted) {
         setState(() {
           _audioMode = _AudioMode.none;
@@ -900,7 +1090,7 @@ class _DetailPageState extends State<DetailPage> {
       return;
     }
 
-    // If audio is playing, stop it first
+    // Stop audio if playing
     if (_audioMode == _AudioMode.audio) {
       await _player.stop();
       _playerReady = false;
@@ -917,14 +1107,16 @@ class _DetailPageState extends State<DetailPage> {
     final item = widget.items[_currentIndex];
     String content = await _fetchData(item['details']);
     content = content.replaceAll(RegExp(r'<\/?b>'), '');
-
     if (content.length > _ttsMaxChars) {
       content = content.substring(0, _ttsMaxChars);
     }
 
-    // Split into smaller chunks for sequential processing
     final chunks = _chunkText(content);
     if (chunks.isEmpty) return;
+
+    _ttsRunId++;
+    final runId = _ttsRunId;
+    _ttsChunkBytes.clear();
 
     if (mounted) {
       setState(() {
@@ -939,7 +1131,6 @@ class _DetailPageState extends State<DetailPage> {
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();
 
-    // Set up subscriptions once for all chunks
     _playerStateSubscription = _player.playerStateStream.listen((playerState) {
       if (mounted) {
         setState(() {
@@ -954,94 +1145,86 @@ class _DetailPageState extends State<DetailPage> {
       if (mounted) setState(() => _position = position);
     });
 
-    // Process chunks sequentially
-    bool hadError = false;
-    for (int i = 0; i < chunks.length; i++) {
-      if (!mounted || _audioMode != _AudioMode.tts || hadError) break;
+    // Pre-fetch first chunk synchronously (nothing is playing yet)
+    File? file = await _fetchTtsChunk(0, chunks[0]);
+    if (file == null || runId != _ttsRunId || !mounted || _audioMode != _AudioMode.tts) {
+      if (mounted && _audioMode == _AudioMode.tts) {
+        setState(() { _audioMode = _AudioMode.none; _isLoadingAudio = false; });
+      }
+      return;
+    }
 
-      final chunk = chunks[i];
-      final lang = _detectLanguage(chunk);
+    if (mounted) setState(() => _isLoadingAudio = false);
+    await _player.setFilePath(file.path);
+    await _player.setSpeed(0.85);
+    await _player.play();
+    _ttsChunkBytes.add(await file.readAsBytes());
+    try { await file.delete(); } catch (_) {}
 
+    // Process remaining chunks with pre-fetch: while chunk N plays,
+    // start fetching chunk N+1 in the background so it's ready when N finishes
+    for (int i = 1; i < chunks.length; i++) {
+      if (runId != _ttsRunId || !mounted || _audioMode != _AudioMode.tts) break;
+
+      // Start fetching next chunk while current one is still playing
+      Future<File?> prefetch = _fetchTtsChunk(i, chunks[i]);
+
+      // Wait for current chunk playback to finish
       try {
-        final response = await http.post(
-          Uri.parse('$_ttsBaseUrl/api/tts/synthesize'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({'text': chunk, 'language': lang}),
-        );
-
-        if (!mounted || _audioMode != _AudioMode.tts) break;
-
-        if (response.statusCode != 200) {
-          hadError = true;
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('TTS error: ${response.statusCode}')),
-            );
-          }
-          break;
+        final state = _player.processingState;
+        if (state != ProcessingState.completed && state != ProcessingState.idle) {
+          await _player.processingStateStream.firstWhere(
+            (s) => s == ProcessingState.completed || s == ProcessingState.idle,
+          );
         }
+      } catch (_) {
+        break;
+      }
+      if (runId != _ttsRunId || !mounted || _audioMode != _AudioMode.tts) break;
 
-        final data = json.decode(response.body);
-        if (data['error'] == true) {
-          hadError = true;
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(data['message'] ?? 'TTS failed')),
-            );
-          }
-          break;
-        }
-
-        final audioBytes = base64.decode(data['audioContent']);
-        final dir = await getTemporaryDirectory();
-        final file = File(
-          '${dir.path}/tts_${i}_${DateTime.now().millisecondsSinceEpoch}.mp3',
-        );
-        await file.writeAsBytes(audioBytes);
-
-        if (!mounted || _audioMode != _AudioMode.tts) {
-          await file.delete();
-          break;
-        }
-
-        if (i == 0 && mounted) {
-          setState(() => _isLoadingAudio = false);
-        }
-
-        await _player.setFilePath(file.path);
-        await _player.play();
-
-        // Wait for this chunk to finish (or stop signal via idle state)
-        await _player.processingStateStream.firstWhere(
-          (state) =>
-              state == ProcessingState.completed ||
-              state == ProcessingState.idle,
-        );
-      } catch (e) {
-        if (!mounted || _audioMode != _AudioMode.tts) break;
-        hadError = true;
+      // Get the pre-fetched file (should be ready by now)
+      File? file = await prefetch;
+      if (file == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('TTS error: $e')),
+            const SnackBar(content: Text('TTS error')),
           );
         }
         break;
       }
+
+      await _player.setFilePath(file.path);
+      await _player.setSpeed(0.85);
+      await _player.play();
+      _ttsChunkBytes.add(await file.readAsBytes());
+      try { await file.delete(); } catch (_) {}
     }
 
-    if (mounted && _audioMode == _AudioMode.tts) {
-      setState(() {
-        _audioMode = _AudioMode.none;
-        _isPlaying = false;
-        _playerReady = false;
-        _position = Duration.zero;
-        _duration = Duration.zero;
-      });
+    // Wait for last chunk to finish playing
+    if (mounted && runId == _ttsRunId && _audioMode == _AudioMode.tts) {
+      try {
+        final state = _player.processingState;
+        if (state != ProcessingState.completed && state != ProcessingState.idle) {
+          await _player.processingStateStream.firstWhere(
+            (s) => s == ProcessingState.completed || s == ProcessingState.idle,
+          );
+        }
+      } catch (_) {}
+      if (mounted && runId == _ttsRunId && _audioMode == _AudioMode.tts) {
+        setState(() {
+          _audioMode = _AudioMode.none;
+          _isPlaying = false;
+          _playerReady = false;
+          _position = Duration.zero;
+          _duration = Duration.zero;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
+    _ttsRunId++;
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();

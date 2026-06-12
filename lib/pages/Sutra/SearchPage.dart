@@ -29,7 +29,9 @@ class _SearchPageState extends State<SearchPage> {
   List<List<dynamic>> _data = [];
   List<List<dynamic>> _filteredData = [];
   String _searchTerm = '';
-  String _selectedCategory = ''; // Define _selectedCategory
+  String _selectedCategory = '';
+
+  List<String> _favorites = [];
 
   int? _currentlyPlayingIndex;
   bool _isPlaying = false;
@@ -52,6 +54,7 @@ class _SearchPageState extends State<SearchPage> {
   void initState() {
     super.initState();
     fetchData(_searchTerm);
+    _loadFavorites();
 
     // Request focus on the TextField when the widget builds
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -248,6 +251,62 @@ class _SearchPageState extends State<SearchPage> {
       }
     }
     return -1; // No previous valid audio found
+  }
+
+  Future<void> _loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _favorites = prefs.getStringList('favorites') ?? [];
+      });
+    }
+  }
+
+  bool _isItemFavorited(List<dynamic> rowData) {
+    final id = rowData.isNotEmpty ? rowData[0].toString() : '';
+    final title = rowData.length > 1 ? rowData[1].toString() : '';
+    return _favorites.any((fav) {
+      final current = json.decode(fav) as Map<String, dynamic>;
+      return current['id'] == id && current['title'] == title;
+    });
+  }
+
+  Future<void> _toggleFavoriteItem(List<dynamic> rowData) async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = rowData.isNotEmpty ? rowData[0].toString() : '';
+    final title = rowData.length > 1 ? rowData[1].toString() : '';
+    final image = rowData.length > 2 ? rowData[2].toString() : '';
+    final details = rowData.length > 3 ? rowData[3].toString() : '';
+    final category = rowData.length > 4 ? rowData[4].toString() : '';
+    final audio = rowData.length > 5 ? rowData[5].toString() : '/';
+
+    final item = {
+      'id': id,
+      'title': title,
+      'image': image,
+      'details': details,
+      'category': category,
+      'audio': audio,
+    };
+
+    final isFavorited = _isItemFavorited(rowData);
+    final currentFavorites = prefs.getStringList('favorites') ?? [];
+
+    if (isFavorited) {
+      currentFavorites.removeWhere((fav) {
+        final current = json.decode(fav) as Map<String, dynamic>;
+        return current['id'] == id && current['title'] == title;
+      });
+    } else {
+      currentFavorites.add(json.encode(item));
+    }
+
+    await prefs.setStringList('favorites', currentFavorites);
+    if (mounted) {
+      setState(() {
+        _favorites = currentFavorites;
+      });
+    }
   }
 
   void _downloadAudio(String urlAudio) async {
@@ -631,6 +690,15 @@ class _SearchPageState extends State<SearchPage> {
                             ],
                           ),
                         ),
+                        trailing: IconButton(
+                          icon: Icon(
+                            _isItemFavorited(rowData)
+                                ? Icons.favorite
+                                : Icons.favorite_border,
+                            color: Colors.red,
+                          ),
+                          onPressed: () => _toggleFavoriteItem(rowData),
+                        ),
                         subtitle: audio != '/'
                             ? Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -816,7 +884,7 @@ class _SearchPageState extends State<SearchPage> {
                                   initialIndex: index,
                                   searchTerm: _searchTerm,
                                   onFavoriteChanged: () {
-                                    fetchData(_searchTerm);
+                                    _loadFavorites();
                                   },
                                 ),
                               ),

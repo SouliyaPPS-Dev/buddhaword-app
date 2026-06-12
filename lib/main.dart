@@ -17,6 +17,9 @@ import 'pages/Calendar/CalendarPage.dart';
 import 'pages/Sutra/CategoryListPage.dart';
 import 'pages/Sutra/ContactInfoPage.dart';
 import 'pages/Sutra/DetailPage.dart';
+import 'pages/Sutra/AnakameSutraPage.dart';
+import 'pages/Sutra/UttayarndhamPage.dart';
+import 'pages/Sutra/EtipitakaPage.dart';
 import 'pages/Sutra/FavoritePage.dart';
 import 'pages/Sutra/RandomImagePage.dart';
 import 'pages/Video/VideoPage.dart';
@@ -208,6 +211,18 @@ class _MyAppState extends State<MyApp> {
           builder: (context, state) => ContactInfoPage(),
         ),
         GoRoute(path: '/search', builder: (context, state) => SearchPage()),
+        GoRoute(
+          path: '/etipitaka',
+          builder: (context, state) => EtipitakaSearchPage(),
+        ),
+        GoRoute(
+          path: '/thaisutra',
+          builder: (context, state) => AnakameSutraPage(),
+        ),
+        GoRoute(
+          path: '/uttayarndham',
+          builder: (context, state) => UttayarndhamPage(),
+        ),
       ],
     );
   }
