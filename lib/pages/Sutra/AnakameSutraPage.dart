@@ -34,21 +34,49 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
   List<AnakameSutraItem> _items = [];
   List<AnakameSutraItem> _filteredItems = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   String? _error;
 
+  int _displayCount = 0;
+  static const int _pageSize = 20;
+
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _fetchListing();
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoading &&
+        !_isLoadingMore &&
+        _displayCount < _filteredItems.length) {
+      _loadMore();
+    }
+  }
+
+  void _loadMore() {
+    setState(() {
+      _isLoadingMore = true;
+      final nextCount = _displayCount + _pageSize;
+      _displayCount = nextCount > _filteredItems.length
+          ? _filteredItems.length
+          : nextCount;
+      _isLoadingMore = false;
+    });
   }
 
   Future<void> _fetchListing() async {
@@ -66,6 +94,7 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
           setState(() {
             _items = items;
             _filteredItems = items;
+            _displayCount = items.length > _pageSize ? _pageSize : items.length;
             _isLoading = false;
           });
         }
@@ -123,6 +152,9 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
           item.title.toLowerCase().contains(query.toLowerCase())
         ).toList();
       }
+      _displayCount = _filteredItems.length > _pageSize
+          ? _pageSize
+          : _filteredItems.length;
     });
   }
 
@@ -260,9 +292,26 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
         else
           Expanded(
             child: ListView.separated(
-              itemCount: _filteredItems.length,
+              controller: _scrollController,
+              itemCount:
+                  _displayCount + (_displayCount < _filteredItems.length ? 1 : 0),
               separatorBuilder: (context, index) => Divider(height: 1),
               itemBuilder: (context, index) {
+                if (index == _displayCount) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.brown,
+                        ),
+                      ),
+                    ),
+                  );
+                }
                 final item = _filteredItems[index];
                 return ListTile(
                   title: RichText(

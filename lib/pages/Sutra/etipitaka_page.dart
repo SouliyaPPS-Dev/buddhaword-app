@@ -41,56 +41,23 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
   ];
 
   List<EtipitakaItem> _allResults = [];
-  List<EtipitakaItem> _displayedResults = [];
-  bool _isLoading = false;
-  bool _isLoadingMore = false;
   bool _isSearching = false;
   String? _error;
   String _selectedCode = 'thai';
   String _query = '';
-  int _displayCount = 0;
-  static const int _pageSize = 10;
   int _searchRunId = 0;
 
+  Map<int, List<EtipitakaItem>> _groupedResults = {};
+
   final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
   final EtipitakaDatabaseService _dbService = EtipitakaDatabaseService();
   Timer? _debounceTimer;
 
   @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
   void dispose() {
     _debounceTimer?.cancel();
-    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
-  }
-
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-            _scrollController.position.maxScrollExtent - 200 &&
-        !_isLoading &&
-        !_isLoadingMore &&
-        _displayCount < _allResults.length) {
-      _loadMore();
-    }
-  }
-
-  void _loadMore() {
-    setState(() {
-      _isLoadingMore = true;
-      final nextCount = _displayCount + _pageSize;
-      _displayCount = nextCount > _allResults.length
-          ? _allResults.length
-          : nextCount;
-      _displayedResults = _allResults.sublist(0, _displayCount);
-      _isLoadingMore = false;
-    });
   }
 
   void _selectCategory(_CategoryInfo cat) {
@@ -99,8 +66,7 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
       _selectedCode = cat.code;
       _query = '';
       _allResults = [];
-      _displayedResults = [];
-      _displayCount = 0;
+      _groupedResults = {};
       _error = null;
     });
   }
@@ -110,8 +76,7 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
     _searchController.clear();
     setState(() {
       _allResults = [];
-      _displayedResults = [];
-      _displayCount = 0;
+      _groupedResults = {};
       _query = '';
       _error = null;
       _searchRunId++;
@@ -179,12 +144,10 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
     final runId = ++_searchRunId;
     setState(() {
       _isSearching = true;
-      _isLoading = true;
       _error = null;
       _query = query;
       _allResults = [];
-      _displayedResults = [];
-      _displayCount = 0;
+      _groupedResults = {};
     });
 
     try {
@@ -192,7 +155,6 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
         if (mounted && runId == _searchRunId) {
           setState(() {
             _error = 'เฉพาะฉบับหลวง (Thai Royal) เท่านั้นที่พร้อมใช้งานออฟไลน์';
-            _isLoading = false;
             _isSearching = false;
           });
         }
@@ -212,13 +174,13 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
           );
         }).toList();
 
+        final grouped = <int, List<EtipitakaItem>>{};
+        for (final item in items) {
+          grouped.putIfAbsent(item.volume, () => []).add(item);
+        }
         setState(() {
           _allResults = items;
-          _displayCount = items.length > _pageSize ? _pageSize : items.length;
-          _displayedResults = items.length > _displayCount
-              ? items.sublist(0, _displayCount)
-              : items;
-          _isLoading = false;
+          _groupedResults = grouped;
           _isSearching = false;
         });
       }
@@ -226,7 +188,6 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
       if (mounted && runId == _searchRunId) {
         setState(() {
           _error = 'Error: $e';
-          _isLoading = false;
           _isSearching = false;
         });
       }
@@ -326,8 +287,6 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
                               _searchController.clear();
                               setState(() {
                                 _allResults = [];
-                                _displayedResults = [];
-                                _displayCount = 0;
                                 _query = '';
                                 _error = null;
                               });
@@ -413,6 +372,8 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
   }
 
   Widget _buildResultsView(bool isDark) {
+    final sortedVolumes = _groupedResults.keys.toList()..sort();
+
     return Column(
       children: [
         Padding(
@@ -428,40 +389,42 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
                       _debounceTimer?.cancel();
                       _debounceTimer = Timer(
                         const Duration(milliseconds: 500),
-                        () => _search(),
+                        () {
+                          if (_searchController.text.trim().isNotEmpty) _search();
+                        },
                       );
                     },
                     onSubmitted: (_) => _search(),
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[100] : Colors.grey[900],
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[100] : Colors.grey[900],
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Search E-Tipitaka...',
+                      hintStyle: TextStyle(
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: isDark ? Colors.brown[200] : Colors.brown,
+                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(
+                                Icons.clear,
+                                color: isDark ? Colors.brown[200] : Colors.brown,
+                              ),
+                              onPressed: _clearSearch,
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    ),
                   ),
-                  decoration: InputDecoration(
-                    hintText: 'Search E-Tipitaka...',
-                    hintStyle: TextStyle(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search,
-                      color: isDark ? Colors.brown[200] : Colors.brown,
-                    ),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.clear,
-                              color: isDark ? Colors.brown[200] : Colors.brown,
-                            ),
-                            onPressed: _clearSearch,
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  ),
-                ),
                 ),
               ),
               SizedBox(
@@ -488,85 +451,102 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
           ),
         if (_isSearching)
           const Expanded(child: Center(child: CircularProgressIndicator()))
-        else if (_displayedResults.isEmpty && !_isSearching)
+        else if (_allResults.isEmpty && !_isSearching)
           const Expanded(child: Center(child: Text('No results found')))
         else
           Expanded(
-            child: ListView.separated(
-              controller: _scrollController,
-              itemCount:
-                  _displayedResults.length +
-                  (_displayCount < _allResults.length ? 1 : 0),
-              separatorBuilder: (context, index) => Divider(height: 1),
+            child: ListView.builder(
+              itemCount: sortedVolumes.length + _allResults.length,
               itemBuilder: (context, index) {
-                if (index == _displayedResults.length) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Center(
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.brown,
-                        ),
-                      ),
-                    ),
-                  );
+                int offset = 0;
+                for (final vol in sortedVolumes) {
+                  final entries = _groupedResults[vol]!;
+                  if (index == offset) {
+                    return _buildVolumeHeader(vol, entries.length, isDark);
+                  }
+                  offset++;
+                  final itemIndex = index - offset;
+                  if (itemIndex < entries.length) {
+                    return _buildGroupedEntry(entries[itemIndex], isDark);
+                  }
+                  offset += entries.length;
                 }
-                final item = _displayedResults[index];
-                return ListTile(
-                  title: Text(
-                    '${index + 1}. ${item.title}',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  subtitle: item.excerpt.isNotEmpty
-                      ? RichText(
-                          text: TextSpan(
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDark
-                                  ? Colors.grey[300]
-                                  : Colors.grey[700],
-                            ),
-                            children: _highlightText(
-                              item.excerpt.length > 100
-                                  ? '${item.excerpt.substring(0, 100)}...'
-                                  : item.excerpt,
-                              _query,
-                            ),
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        )
-                      : null,
-                  trailing: Icon(Icons.chevron_right, color: Colors.brown),
-                  onTap: () {
-                    final resultIndex = _allResults.indexOf(item);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => EtipitakaContentPage(
-                          title: item.title,
-                          code: _selectedCode,
-                          volume: item.volume,
-                          page: item.page,
-                          results: _allResults,
-                          resultIndex: resultIndex >= 0 ? resultIndex : 0,
-                          searchQuery: _query,
-                        ),
-                      ),
-                    );
-                  },
-                );
+                return const SizedBox.shrink();
               },
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildVolumeHeader(int volume, int count, bool isDark) {
+    return Container(
+      color: isDark ? Colors.grey[800] : Colors.brown.shade100,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Icon(Icons.menu_book, size: 18, color: Colors.brown),
+          const SizedBox(width: 8),
+          Text(
+            'เล่มที่ $volume  ($count รายการ)',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.brown[200] : Colors.brown[800],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupedEntry(EtipitakaItem item, bool isDark) {
+    return ListTile(
+      title: Text(
+        'หน้า ${item.page}',
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+          color: isDark ? Colors.grey[100] : Colors.grey[900],
+        ),
+      ),
+      subtitle: item.excerpt.isNotEmpty
+          ? RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                ),
+                children: _highlightText(
+                  item.excerpt.length > 100
+                      ? '${item.excerpt.substring(0, 100)}...'
+                      : item.excerpt,
+                  _query,
+                ),
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            )
+          : null,
+      trailing: Icon(Icons.chevron_right, color: Colors.brown),
+      onTap: () {
+        final resultIndex = _allResults.indexOf(item);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EtipitakaContentPage(
+              title: item.title,
+              code: _selectedCode,
+              volume: item.volume,
+              page: item.page,
+              results: _allResults,
+              resultIndex: resultIndex >= 0 ? resultIndex : 0,
+              searchQuery: _query,
+            ),
+          ),
+        );
+      },
     );
   }
 }
