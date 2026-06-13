@@ -469,6 +469,7 @@ class _DetailPageState extends State<DetailPage> {
     final currentItem = widget.items[_currentIndex];
 
     return Scaffold(
+      backgroundColor: _isDarkMode ? Colors.black : Color.fromRGBO(246, 238, 217, 1.0),
       appBar: _isFullScreen
           ? PreferredSize(
               preferredSize: Size.zero,

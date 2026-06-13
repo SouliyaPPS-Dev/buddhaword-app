@@ -553,6 +553,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: context.watch<ThemeProvider>().isDarkMode ? Colors.black : Color.fromRGBO(246, 238, 217, 1.0),
       drawer: const custom_nav.NavigationDrawer(),
       appBar: _isFullScreen
           ? PreferredSize(
