@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
 import 'AnakameSutraPage.dart';
 
@@ -206,18 +207,49 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
 
   Future<void> _loadFavoriteState() async {
     final prefs = await SharedPreferences.getInstance();
+    final favorites = prefs.getStringList('favorites') ?? [];
     final identifier = _currentUrl;
     if (!mounted) return;
     setState(() {
-      _isFavorited = prefs.getBool('fav_anakame_$identifier') ?? false;
+      _isFavorited = favorites.any((fav) {
+        try {
+          final data = json.decode(fav) as Map<String, dynamic>;
+          return data['id'] == identifier;
+        } catch (_) {
+          return false;
+        }
+      });
     });
   }
 
   Future<void> _toggleFavorite() async {
     final prefs = await SharedPreferences.getInstance();
     final identifier = _currentUrl;
+    final favorites = List<String>.from(prefs.getStringList('favorites') ?? []);
+
+    if (_isFavorited) {
+      favorites.removeWhere((fav) {
+        try {
+          final data = json.decode(fav) as Map<String, dynamic>;
+          return data['id'] == identifier;
+        } catch (_) {
+          return false;
+        }
+      });
+    } else {
+      final item = json.encode({
+        'id': identifier,
+        'title': _currentTitle,
+        'audio': '/',
+        'details': _htmlContent != null ? _extractPlainText(_htmlContent!) : _currentUrl,
+        'category': 'anakame',
+        'image': '',
+      });
+      favorites.add(item);
+    }
+
+    await prefs.setStringList('favorites', favorites);
     setState(() => _isFavorited = !_isFavorited);
-    await prefs.setBool('fav_anakame_$identifier', _isFavorited);
   }
 
   String _detectLanguage(String text) {
@@ -521,6 +553,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: const custom_nav.NavigationDrawer(),
       appBar: _isFullScreen
           ? PreferredSize(
               preferredSize: Size.zero,
@@ -556,6 +589,12 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
                     color: Colors.white,
                   ),
                   onPressed: _toggleFavorite,
+                ),
+                Builder(
+                  builder: (context) => IconButton(
+                    icon: const Icon(Icons.menu_open, color: Colors.white),
+                    onPressed: () => Scaffold.of(context).openDrawer(),
+                  ),
                 ),
                 Consumer<ThemeProvider>(
                   builder: (context, themeProvider, child) {
@@ -604,19 +643,24 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _isFullScreen
           ? null
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildFAB(Icons.add, _increaseFontSize, 'fab1'),
-                const SizedBox(width: 12),
-                _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
-                const SizedBox(width: 12),
-                _buildFAB(Icons.content_copy, _copyContent, 'fab3'),
-                const SizedBox(width: 12),
-                _buildFAB(Icons.share, _shareContent, 'fab4'),
-                const SizedBox(width: 12),
-                _buildVolumeFab(),
-              ],
+          : Padding(
+              padding: EdgeInsets.only(
+                bottom: (_ttsActive || _isTtsLoading) ? 60 : 0,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildFAB(Icons.add, _increaseFontSize, 'fab1'),
+                  const SizedBox(width: 12),
+                  _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
+                  const SizedBox(width: 12),
+                  _buildFAB(Icons.content_copy, _copyContent, 'fab3'),
+                  const SizedBox(width: 12),
+                  _buildFAB(Icons.share, _shareContent, 'fab4'),
+                  const SizedBox(width: 12),
+                  _buildVolumeFab(),
+                ],
+              ),
             ),
     );
   }

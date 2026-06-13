@@ -69,7 +69,7 @@ class _DetailPageState extends State<DetailPage> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    _currentIndex = widget.items.isEmpty ? 0 : widget.initialIndex.clamp(0, widget.items.length - 1);
     _pageController = PageController(initialPage: _currentIndex);
     _loadFontSizeFromSharedPreferences();
     _loadFavoriteState();
@@ -465,6 +465,7 @@ class _DetailPageState extends State<DetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.items.isEmpty) return const SizedBox.shrink();
     final currentItem = widget.items[_currentIndex];
 
     return Scaffold(
@@ -616,19 +617,24 @@ class _DetailPageState extends State<DetailPage> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _isFullScreen
           ? null
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+          : Padding(
+              padding: EdgeInsets.only(
+                bottom: (_audioMode == _AudioMode.tts || _ttsChunkBytes.isNotEmpty) ? 60 : 0,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
                   _buildFAB(Icons.add, _increaseFontSize, 'fab1'),
-                const SizedBox(width: 12),
-                _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
-                const SizedBox(width: 12),
-                _buildFAB(Icons.content_copy, _copyContentToClipboard, 'fab3'),
-                const SizedBox(width: 12),
-                _buildFAB(Icons.share, _shareDetailLink, 'fab4'),
-                const SizedBox(width: 12),
-                _buildVolumeFab(),
-              ],
+                  const SizedBox(width: 12),
+                  _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
+                  const SizedBox(width: 12),
+                  _buildFAB(Icons.content_copy, _copyContentToClipboard, 'fab3'),
+                  const SizedBox(width: 12),
+                  _buildFAB(Icons.share, _shareDetailLink, 'fab4'),
+                  const SizedBox(width: 12),
+                  _buildVolumeFab(),
+                ],
+              ),
             ),
     );
   }

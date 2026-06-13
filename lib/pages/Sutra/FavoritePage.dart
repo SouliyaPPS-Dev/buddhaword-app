@@ -627,7 +627,7 @@ class _FavoritePageState extends State<FavoritePage> {
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(),
                                     ),
-                                    if (audio != '/')
+                                    if (audio != null && audio != '/' && audio.toString().isNotEmpty)
                                       CircleAvatar(
                                         radius:
                                             22, // Smaller radius for a smaller button
@@ -667,7 +667,7 @@ class _FavoritePageState extends State<FavoritePage> {
                                   ],
                                 ),
                               ),
-                              subtitle: audio != '/'
+                              subtitle: audio != null && audio != '/' && audio.toString().isNotEmpty
                                   ? Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
