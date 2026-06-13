@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart' show AudioPlayer, ProcessingState;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../themes/ThemeProvider.dart';
@@ -73,6 +74,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     _currentIndex = widget.itemIndex ?? 0;
     _fetchContent();
     _loadFontSizeFromSharedPreferences();
+    _loadFavoriteState();
   }
 
   Future<void> _fetchContent() async {
@@ -121,6 +123,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       _currentUrl = _resolveUrl(prevItem.url);
     });
     _fetchContent();
+    _loadFavoriteState();
   }
 
   void _goToNextItem() {
@@ -135,6 +138,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       _currentUrl = _resolveUrl(nextItem.url);
     });
     _fetchContent();
+    _loadFavoriteState();
   }
 
   String _resolveUrl(String href) {
@@ -192,6 +196,28 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Content copied to clipboard')),
     );
+  }
+
+  void _shareContent() {
+    if (_htmlContent == null) return;
+    final text = _extractPlainText(_htmlContent!);
+    Share.share(text, subject: _currentTitle);
+  }
+
+  Future<void> _loadFavoriteState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final identifier = _currentUrl;
+    if (!mounted) return;
+    setState(() {
+      _isFavorited = prefs.getBool('fav_anakame_$identifier') ?? false;
+    });
+  }
+
+  Future<void> _toggleFavorite() async {
+    final prefs = await SharedPreferences.getInstance();
+    final identifier = _currentUrl;
+    setState(() => _isFavorited = !_isFavorited);
+    await prefs.setBool('fav_anakame_$identifier', _isFavorited);
   }
 
   String _detectLanguage(String text) {
@@ -490,6 +516,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       widget.items != null && _currentIndex < widget.items!.length - 1;
 
   bool _isFullScreen = false;
+  bool _isFavorited = false;
 
   @override
   Widget build(BuildContext context) {
@@ -524,9 +551,11 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
                   onPressed: () => setState(() => _isFullScreen = true),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.copy, color: Colors.white),
-                  tooltip: 'Copy content',
-                  onPressed: _htmlContent != null ? () => _copyContent() : null,
+                  icon: Icon(
+                    _isFavorited ? Icons.favorite : Icons.favorite_border,
+                    color: Colors.white,
+                  ),
+                  onPressed: _toggleFavorite,
                 ),
                 Consumer<ThemeProvider>(
                   builder: (context, themeProvider, child) {
@@ -544,7 +573,12 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
             ),
       body: Stack(
         children: [
-          _buildBody(),
+          Column(
+            children: [
+              Expanded(child: _buildBody()),
+              _buildTtsBar(),
+            ],
+          ),
           if (_isFullScreen)
             Positioned(
               top: MediaQuery.of(context).padding.top + 8,
@@ -567,101 +601,21 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
             ),
         ],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _isFullScreen
           ? null
           : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton(
-                    heroTag: 'fab_prev',
-                    onPressed: _hasPrev ? _goToPrevItem : null,
-                    backgroundColor: _hasPrev
-                        ? const Color(0xFFF5F5F5)
-                        : Colors.grey.shade300,
-                    child: Icon(
-                      Icons.arrow_back,
-                      color: _hasPrev
-                          ? const Color.fromARGB(241, 179, 93, 78)
-                          : Colors.grey,
-                    ),
-                  ),
-                ),
+                _buildFAB(Icons.add, _increaseFontSize, 'fab1'),
                 const SizedBox(width: 12),
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton(
-                    heroTag: 'fab_minus',
-                    onPressed: _decreaseFontSize,
-                    backgroundColor: const Color(0xFFF5F5F5),
-                    child: const Icon(
-                      Icons.remove,
-                      color: Color.fromARGB(241, 179, 93, 78),
-                    ),
-                  ),
-                ),
+                _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
                 const SizedBox(width: 12),
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton(
-                    heroTag: 'fab_plus',
-                    onPressed: _increaseFontSize,
-                    backgroundColor: const Color(0xFFF5F5F5),
-                    child: const Icon(
-                      Icons.add,
-                      color: Color.fromARGB(241, 179, 93, 78),
-                    ),
-                  ),
-                ),
+                _buildFAB(Icons.content_copy, _copyContent, 'fab3'),
                 const SizedBox(width: 12),
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton(
-                    heroTag: 'fab_volume',
-                    onPressed: _isTtsLoading ? null : _speakContent,
-                    backgroundColor: _ttsActive
-                        ? Colors.brown
-                        : const Color(0xFFF5F5F5),
-                    child: _isTtsLoading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.brown,
-                            ),
-                          )
-                        : Icon(
-                            _ttsActive ? Icons.stop : Icons.volume_up,
-                            color: _ttsActive
-                                ? Colors.white
-                                : const Color.fromARGB(241, 179, 93, 78),
-                          ),
-                  ),
-                ),
+                _buildFAB(Icons.share, _shareContent, 'fab4'),
                 const SizedBox(width: 12),
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton(
-                    heroTag: 'fab_next',
-                    onPressed: _hasNext ? _goToNextItem : null,
-                    backgroundColor: _hasNext
-                        ? const Color(0xFFF5F5F5)
-                        : Colors.grey.shade300,
-                    child: Icon(
-                      Icons.arrow_forward,
-                      color: _hasNext
-                          ? const Color.fromARGB(241, 179, 93, 78)
-                          : Colors.grey,
-                    ),
-                  ),
-                ),
+                _buildVolumeFab(),
               ],
             ),
     );
@@ -722,62 +676,107 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
               }).toList(),
             ),
           ),
-          if (_ttsActive || _isTtsLoading)
-            Container(
-              color: Colors.brown.shade50,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Colors.brown,
-                    ),
-                    onPressed: () async {
-                      if (_isPlaying) {
-                        await _player.pause();
-                      } else {
-                        await _player.play();
-                      }
-                    },
-                  ),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: _duration.inMilliseconds.toDouble().clamp(
-                        1,
-                        double.infinity,
-                      ),
-                      value: _position.inMilliseconds.toDouble().clamp(
-                        0,
-                        _duration.inMilliseconds.toDouble(),
-                      ),
-                      onChanged: (v) =>
-                          _player.seek(Duration(milliseconds: v.toInt())),
-                    ),
-                  ),
-                  Text(
-                    '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
-                    style: TextStyle(fontSize: 11, color: Colors.brown),
-                  ),
-                  SizedBox(width: 4),
-                  if (_ttsChunkBytes.isNotEmpty)
-                    IconButton(
-                      icon: Icon(Icons.download, color: Colors.brown, size: 20),
-                      onPressed: _downloadAudio,
-                      constraints: BoxConstraints(minWidth: 36, minHeight: 36),
-                      padding: EdgeInsets.zero,
-                    ),
-                  IconButton(
-                    icon: Icon(Icons.stop, color: Colors.red, size: 20),
-                    onPressed: _stopTts,
-                    constraints: BoxConstraints(minWidth: 36, minHeight: 36),
-                    padding: EdgeInsets.zero,
-                  ),
-                ],
-              ),
-            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTtsBar() {
+    if (!_ttsActive && !_isTtsLoading) return const SizedBox.shrink();
+    return Container(
+      color: Colors.brown.shade50,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(
+              _isPlaying ? Icons.pause : Icons.play_arrow,
+              color: Colors.brown,
+            ),
+            onPressed: () async {
+              if (_isPlaying) {
+                await _player.pause();
+              } else {
+                await _player.play();
+              }
+            },
+          ),
+          Expanded(
+            child: Slider(
+              min: 0,
+              max: _duration.inMilliseconds.toDouble().clamp(
+                1,
+                double.infinity,
+              ),
+              value: _position.inMilliseconds.toDouble().clamp(
+                0,
+                _duration.inMilliseconds.toDouble(),
+              ),
+              onChanged: (v) =>
+                  _player.seek(Duration(milliseconds: v.toInt())),
+            ),
+          ),
+          Text(
+            '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
+            style: TextStyle(fontSize: 11, color: Colors.brown),
+          ),
+          SizedBox(width: 4),
+          if (_ttsChunkBytes.isNotEmpty)
+            IconButton(
+              icon: Icon(Icons.download, color: Colors.brown, size: 20),
+              onPressed: _downloadAudio,
+              constraints: BoxConstraints(minWidth: 36, minHeight: 36),
+              padding: EdgeInsets.zero,
+            ),
+          IconButton(
+            icon: Icon(Icons.stop, color: Colors.red, size: 20),
+            onPressed: _stopTts,
+            constraints: BoxConstraints(minWidth: 36, minHeight: 36),
+            padding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFAB(IconData icon, VoidCallback onPressed, String heroTag) {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: FloatingActionButton(
+        heroTag: heroTag,
+        onPressed: onPressed,
+        backgroundColor: const Color(0xFFF5F5F5),
+        child: Icon(icon, color: Color.fromARGB(241, 179, 93, 78)),
+      ),
+    );
+  }
+
+  Widget _buildVolumeFab() {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: FloatingActionButton(
+        heroTag: 'fab_volume',
+        onPressed: _isTtsLoading ? null : _speakContent,
+        backgroundColor: _ttsActive
+            ? Colors.brown
+            : const Color(0xFFF5F5F5),
+        child: _isTtsLoading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.brown,
+                ),
+              )
+            : Icon(
+                _ttsActive ? Icons.stop : Icons.volume_up,
+                color: _ttsActive
+                    ? Colors.white
+                    : const Color.fromARGB(241, 179, 93, 78),
+              ),
       ),
     );
   }

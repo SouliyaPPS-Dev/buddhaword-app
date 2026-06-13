@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart' show AudioPlayer, ProcessingState;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/etipitaka_database_service.dart';
@@ -71,6 +72,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
 
   final EtipitakaDatabaseService _dbService = EtipitakaDatabaseService();
   bool _isFullScreen = false;
+  bool _isFavorited = false;
 
   @override
   void initState() {
@@ -81,6 +83,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
     _currentTitle = widget.title;
     _fetchContent();
     _loadFontSizeFromSharedPreferences();
+    _loadFavoriteState();
   }
 
   Future<void> _fetchContent() async {
@@ -122,6 +125,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
       }
     });
     _fetchContent();
+    _loadFavoriteState();
   }
 
   void _goToNextPage() {
@@ -130,6 +134,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
       _currentPage++;
     });
     _fetchContent();
+    _loadFavoriteState();
   }
 
   List<String> _extractParagraphs(String text) {
@@ -159,6 +164,29 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Content copied to clipboard')),
     );
+  }
+
+  void _shareContent() {
+    if (_plainText == null) return;
+    SharePlus.instance.share(
+      ShareParams(text: _plainText!, subject: _currentTitle),
+    );
+  }
+
+  Future<void> _loadFavoriteState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final identifier = '${widget.code}_v${widget.volume}_p${widget.page}';
+    if (!mounted) return;
+    setState(() {
+      _isFavorited = prefs.getBool('fav_etipitaka_$identifier') ?? false;
+    });
+  }
+
+  Future<void> _toggleFavorite() async {
+    final prefs = await SharedPreferences.getInstance();
+    final identifier = '${widget.code}_v${widget.volume}_p${widget.page}';
+    setState(() => _isFavorited = !_isFavorited);
+    await prefs.setBool('fav_etipitaka_$identifier', _isFavorited);
   }
 
   String _detectLanguage(String text) {
@@ -429,9 +457,11 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
                   onPressed: () => setState(() => _isFullScreen = true),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.copy, color: Colors.white),
-                  tooltip: 'Copy content',
-                  onPressed: _plainText != null ? () => _copyContent() : null,
+                  icon: Icon(
+                    _isFavorited ? Icons.favorite : Icons.favorite_border,
+                    color: Colors.white,
+                  ),
+                  onPressed: _toggleFavorite,
                 ),
                 Consumer<ThemeProvider>(
                   builder: (context, themeProvider, child) {
@@ -449,7 +479,12 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
             ),
       body: Stack(
         children: [
-          _buildBody(),
+          Column(
+            children: [
+              Expanded(child: _buildBody()),
+              _buildTtsBar(),
+            ],
+          ),
           if (_isFullScreen)
             Positioned(
               top: MediaQuery.of(context).padding.top + 8,
@@ -472,93 +507,21 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
             ),
         ],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _isFullScreen
           ? null
           : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton(
-                    heroTag: 'fab_prev',
-                    onPressed: _isLoading ? null : _goToPrevPage,
-                    backgroundColor: const Color(0xFFF5F5F5),
-                    child: const Icon(
-                      Icons.arrow_back,
-                      color: Color.fromARGB(241, 179, 93, 78),
-                    ),
-                  ),
-                ),
+                _buildFAB(Icons.add, _increaseFontSize, 'fab1'),
                 const SizedBox(width: 12),
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton(
-                    heroTag: 'fab_minus',
-                    onPressed: _decreaseFontSize,
-                    backgroundColor: const Color(0xFFF5F5F5),
-                    child: const Icon(
-                      Icons.remove,
-                      color: Color.fromARGB(241, 179, 93, 78),
-                    ),
-                  ),
-                ),
+                _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
                 const SizedBox(width: 12),
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton(
-                    heroTag: 'fab_plus',
-                    onPressed: _increaseFontSize,
-                    backgroundColor: const Color(0xFFF5F5F5),
-                    child: const Icon(
-                      Icons.add,
-                      color: Color.fromARGB(241, 179, 93, 78),
-                    ),
-                  ),
-                ),
+                _buildFAB(Icons.content_copy, _copyContent, 'fab3'),
                 const SizedBox(width: 12),
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton(
-                    heroTag: 'fab_volume',
-                    onPressed: _isTtsLoading ? null : _speakContent,
-                    backgroundColor: _ttsActive
-                        ? Colors.brown
-                        : const Color(0xFFF5F5F5),
-                    child: _isTtsLoading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.brown,
-                            ),
-                          )
-                        : Icon(
-                            _ttsActive ? Icons.stop : Icons.volume_up,
-                            color: _ttsActive
-                                ? Colors.white
-                                : const Color.fromARGB(241, 179, 93, 78),
-                          ),
-                  ),
-                ),
+                _buildFAB(Icons.share, _shareContent, 'fab4'),
                 const SizedBox(width: 12),
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: FloatingActionButton(
-                    heroTag: 'fab_next',
-                    onPressed: _isLoading ? null : _goToNextPage,
-                    backgroundColor: const Color(0xFFF5F5F5),
-                    child: const Icon(
-                      Icons.arrow_forward,
-                      color: Color.fromARGB(241, 179, 93, 78),
-                    ),
-                  ),
-                ),
+                _buildVolumeFab(),
               ],
             ),
     );
@@ -634,62 +597,104 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
               }).toList(),
             ),
           ),
-          if (_ttsActive || _isTtsLoading)
-            Container(
-              color: Colors.brown.shade50,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Colors.brown,
-                    ),
-                    onPressed: () async {
-                      if (_isPlaying) {
-                        await _player.pause();
-                      } else {
-                        await _player.play();
-                      }
-                    },
-                  ),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: _duration.inMilliseconds.toDouble().clamp(
-                        1,
-                        double.infinity,
-                      ),
-                      value: _position.inMilliseconds.toDouble().clamp(
-                        0,
-                        _duration.inMilliseconds.toDouble(),
-                      ),
-                      onChanged: (v) =>
-                          _player.seek(Duration(milliseconds: v.toInt())),
-                    ),
-                  ),
-                  Text(
-                    '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
-                    style: TextStyle(fontSize: 11, color: Colors.brown),
-                  ),
-                  SizedBox(width: 4),
-                  if (_ttsChunkBytes.isNotEmpty)
-                    IconButton(
-                      icon: Icon(Icons.download, color: Colors.brown, size: 20),
-                      onPressed: _downloadAudio,
-                      constraints: BoxConstraints(minWidth: 36, minHeight: 36),
-                      padding: EdgeInsets.zero,
-                    ),
-                  IconButton(
-                    icon: Icon(Icons.stop, color: Colors.red, size: 20),
-                    onPressed: _stopTts,
-                    constraints: BoxConstraints(minWidth: 36, minHeight: 36),
-                    padding: EdgeInsets.zero,
-                  ),
-                ],
-              ),
-            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTtsBar() {
+    if (!_ttsActive && !_isTtsLoading) return const SizedBox.shrink();
+    return Container(
+      color: Colors.brown.shade50,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(
+              _isPlaying ? Icons.pause : Icons.play_arrow,
+              color: Colors.brown,
+            ),
+            onPressed: () async {
+              if (_isPlaying) {
+                await _player.pause();
+              } else {
+                await _player.play();
+              }
+            },
+          ),
+          Expanded(
+            child: Slider(
+              min: 0,
+              max: _duration.inMilliseconds.toDouble().clamp(
+                1,
+                double.infinity,
+              ),
+              value: _position.inMilliseconds.toDouble().clamp(
+                0,
+                _duration.inMilliseconds.toDouble(),
+              ),
+              onChanged: (v) => _player.seek(Duration(milliseconds: v.toInt())),
+            ),
+          ),
+          Text(
+            '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
+            style: TextStyle(fontSize: 11, color: Colors.brown),
+          ),
+          SizedBox(width: 4),
+          if (_ttsChunkBytes.isNotEmpty)
+            IconButton(
+              icon: Icon(Icons.download, color: Colors.brown, size: 20),
+              onPressed: _downloadAudio,
+              constraints: BoxConstraints(minWidth: 36, minHeight: 36),
+              padding: EdgeInsets.zero,
+            ),
+          IconButton(
+            icon: Icon(Icons.stop, color: Colors.red, size: 20),
+            onPressed: _stopTts,
+            constraints: BoxConstraints(minWidth: 36, minHeight: 36),
+            padding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFAB(IconData icon, VoidCallback onPressed, String heroTag) {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: FloatingActionButton(
+        heroTag: heroTag,
+        onPressed: onPressed,
+        backgroundColor: const Color(0xFFF5F5F5),
+        child: Icon(icon, color: Color.fromARGB(241, 179, 93, 78)),
+      ),
+    );
+  }
+
+  Widget _buildVolumeFab() {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: FloatingActionButton(
+        heroTag: 'fab_volume',
+        onPressed: _isTtsLoading ? null : _speakContent,
+        backgroundColor: _ttsActive ? Colors.brown : const Color(0xFFF5F5F5),
+        child: _isTtsLoading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.brown,
+                ),
+              )
+            : Icon(
+                _ttsActive ? Icons.stop : Icons.volume_up,
+                color: _ttsActive
+                    ? Colors.white
+                    : const Color.fromARGB(241, 179, 93, 78),
+              ),
       ),
     );
   }

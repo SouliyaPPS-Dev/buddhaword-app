@@ -842,6 +842,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
           );
         },
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

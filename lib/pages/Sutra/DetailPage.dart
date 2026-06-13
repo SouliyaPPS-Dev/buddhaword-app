@@ -536,14 +536,21 @@ class _DetailPageState extends State<DetailPage> {
       drawer: const custom_nav.NavigationDrawer(),
       body: Stack(
         children: [
-          PageView.builder(
-            controller: _pageController,
-            itemCount: widget.items.length,
-            onPageChanged: _onPageChanged,
-            itemBuilder: (context, index) {
-              final item = widget.items[index];
-              return _buildPageContent(item);
-            },
+          Column(
+            children: [
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: widget.items.length,
+                  onPageChanged: _onPageChanged,
+                  itemBuilder: (context, index) {
+                    final item = widget.items[index];
+                    return _buildPageContent(item);
+                  },
+                ),
+              ),
+              _buildTtsBar(),
+            ],
           ),
           // Navigation Buttons Overlay
           if (!_isFullScreen && _currentIndex > 0)
@@ -606,12 +613,13 @@ class _DetailPageState extends State<DetailPage> {
             ),
         ],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _isFullScreen
           ? null
           : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildFAB(Icons.add, _increaseFontSize, 'fab1'),
+                  _buildFAB(Icons.add, _increaseFontSize, 'fab1'),
                 const SizedBox(width: 12),
                 _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
                 const SizedBox(width: 12),
@@ -622,7 +630,6 @@ class _DetailPageState extends State<DetailPage> {
                 _buildVolumeFab(),
               ],
             ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -714,55 +721,59 @@ class _DetailPageState extends State<DetailPage> {
               ),
             ),
           ),
-          if (_audioMode == _AudioMode.tts || _ttsChunkBytes.isNotEmpty)
-            Container(
-              color: Colors.brown.shade50,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Colors.brown,
-                    ),
-                    onPressed: () async {
-                      if (_isPlaying) {
-                        await _player.pause();
-                      } else {
-                        await _player.play();
-                      }
-                    },
-                  ),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: _duration.inMilliseconds.toDouble().clamp(1, double.infinity),
-                      value: _position.inMilliseconds.toDouble().clamp(0, _duration.inMilliseconds.toDouble()),
-                      onChanged: (v) => _player.seek(Duration(milliseconds: v.toInt())),
-                    ),
-                  ),
-                  Text(
-                    '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
-                    style: TextStyle(fontSize: 11, color: Colors.brown),
-                  ),
-                  SizedBox(width: 4),
-                  if (_ttsChunkBytes.isNotEmpty)
-                    IconButton(
-                      icon: Icon(Icons.download, color: Colors.brown, size: 20),
-                      onPressed: () => _downloadAudio('/'),
-                      constraints: BoxConstraints(minWidth: 36, minHeight: 36),
-                      padding: EdgeInsets.zero,
-                    ),
-                  IconButton(
-                    icon: Icon(Icons.stop, color: Colors.red, size: 20),
-                    onPressed: _stopTts,
-                    constraints: BoxConstraints(minWidth: 36, minHeight: 36),
-                    padding: EdgeInsets.zero,
-                  ),
-                ],
-              ),
-            ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildTtsBar() {
+    if (_audioMode != _AudioMode.tts && _ttsChunkBytes.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      color: Colors.brown.shade50,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(
+              _isPlaying ? Icons.pause : Icons.play_arrow,
+              color: Colors.brown,
+            ),
+            onPressed: () async {
+              if (_isPlaying) {
+                await _player.pause();
+              } else {
+                await _player.play();
+              }
+            },
+          ),
+          Expanded(
+            child: Slider(
+              min: 0,
+              max: _duration.inMilliseconds.toDouble().clamp(1, double.infinity),
+              value: _position.inMilliseconds.toDouble().clamp(0, _duration.inMilliseconds.toDouble()),
+              onChanged: (v) => _player.seek(Duration(milliseconds: v.toInt())),
+            ),
+          ),
+          Text(
+            '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
+            style: TextStyle(fontSize: 11, color: Colors.brown),
+          ),
+          SizedBox(width: 4),
+          if (_ttsChunkBytes.isNotEmpty)
+            IconButton(
+              icon: Icon(Icons.download, color: Colors.brown, size: 20),
+              onPressed: () => _downloadAudio('/'),
+              constraints: BoxConstraints(minWidth: 36, minHeight: 36),
+              padding: EdgeInsets.zero,
+            ),
+          IconButton(
+            icon: Icon(Icons.stop, color: Colors.red, size: 20),
+            onPressed: _stopTts,
+            constraints: BoxConstraints(minWidth: 36, minHeight: 36),
+            padding: EdgeInsets.zero,
+          ),
         ],
       ),
     );

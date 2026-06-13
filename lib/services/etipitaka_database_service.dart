@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -40,6 +41,22 @@ class EtipitakaDatabaseService {
     'palinew': 'palinew.sqlite.gz',
   };
 
+  static const Map<String, String> _labelMap = {
+    'thai': 'ไทย (ฉบับหลวง)',
+    'pali': 'บาลี (สยามรัฐ)',
+    'thaimm': 'ไทย (มหามกุฏฯ)',
+    'thaimc': 'ไทย (มหาจุฬาฯ)',
+    'thaipb': 'พุทธวจน-หมวดธรรม',
+    'thaibt': 'ชุดจากพระโอษฐ์ ๕ เล่ม',
+    'thaiwn': 'ไทย (wn)',
+    'thaict': 'ไทย (ct)',
+    'romanct': 'โรมัน (ct)',
+    'palimc': 'บาลี (mc)',
+    'thaims': 'ไทย (ms)',
+    'thaivn': 'ไทย (vn)',
+    'palinew': 'บาลี (new)',
+  };
+
   final Map<String, Database> _databases = {};
   String? _appDir;
 
@@ -51,6 +68,10 @@ class EtipitakaDatabaseService {
   }
 
   bool isCodeAvailable(String code) => _assetMap.containsKey(code);
+
+  String? labelForCode(String code) => _labelMap[code];
+
+  List<String> getAvailableCodes() => _assetMap.keys.toList();
 
   Future<Database> _openDb(String code) async {
     if (_databases.containsKey(code)) return _databases[code]!;
@@ -66,14 +87,26 @@ class EtipitakaDatabaseService {
       }
       final compressedData =
           await rootBundle.load('assets/databases/$assetPath');
-      final bytes = GZipCodec().decode(compressedData.buffer.asUint8List());
+      final bytes = await Isolate.run(
+        () => GZipCodec().decode(compressedData.buffer.asUint8List()),
+      );
       await file.writeAsBytes(bytes);
     }
 
-    final db = await openDatabase(dbPath, readOnly: true);
-    _databases[code] = db;
-    return db;
+    try {
+      final db = await openDatabase(dbPath, readOnly: true);
+      _databases[code] = db;
+      return db;
+    } catch (e) {
+      if (file.existsSync()) {
+        await file.delete();
+      }
+      _databases.remove(code);
+      rethrow;
+    }
   }
+
+  static const int _searchResultLimit = 200;
 
   Future<List<EtipitakaSearchResult>> search(
       String code, String query) async {
@@ -84,6 +117,7 @@ class EtipitakaDatabaseService {
       where: 'content LIKE ?',
       whereArgs: ['%$query%'],
       orderBy: 'CAST(volume AS INTEGER), CAST(page AS INTEGER)',
+      limit: _searchResultLimit,
     );
 
     return results.map((row) {

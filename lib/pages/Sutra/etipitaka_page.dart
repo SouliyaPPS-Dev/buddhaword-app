@@ -31,14 +31,18 @@ class EtipitakaSearchPage extends StatefulWidget {
 }
 
 class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
-  final List<_CategoryInfo> _categories = const [
-    _CategoryInfo('thai', 'ไทย (ฉบับหลวง)', Icons.book),
-    _CategoryInfo('pali', 'บาลี (สยามรัฐ)', Icons.menu_book),
-    _CategoryInfo('thaimm', 'ไทย (มหามกุฏฯ)', Icons.book),
-    _CategoryInfo('thaimc', 'ไทย (มหาจุฬาฯ)', Icons.book),
-    _CategoryInfo('thaipb', 'พุทธวจน-หมวดธรรม', Icons.lightbulb),
-    _CategoryInfo('thaibt', 'ชุดจากพระโอษฐ์ ๕ เล่ม', Icons.auto_stories),
-  ];
+  final EtipitakaDatabaseService _dbService = EtipitakaDatabaseService();
+
+  static const _excludedCodes = {
+    'thaiwn', 'thaict', 'romanct', 'palimc', 'thaims', 'thaivn', 'palinew',
+  };
+
+  late final List<_CategoryInfo> _categories = _dbService.getAvailableCodes()
+      .where((code) => !_excludedCodes.contains(code))
+      .map((code) {
+        final label = _dbService.labelForCode(code) ?? code;
+        return _CategoryInfo(code, label, Icons.book);
+      }).toList();
 
   List<EtipitakaItem> _allResults = [];
   bool _isSearching = false;
@@ -50,7 +54,6 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
   Map<int, List<EtipitakaItem>> _groupedResults = {};
 
   final TextEditingController _searchController = TextEditingController();
-  final EtipitakaDatabaseService _dbService = EtipitakaDatabaseService();
   Timer? _debounceTimer;
 
   @override
