@@ -41,22 +41,16 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
-        versionCode = 74
-        versionName = "74.0.0"
+        versionCode = 75
+        versionName = "75.0.0"
     }
 
     signingConfigs {
         create("release") {
-            if (keystoreProperties.containsKey("keyAlias")) {
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-            }
-            if (keystoreProperties.containsKey("keyPassword")) {
-                keyPassword = keystoreProperties.getProperty("keyPassword")
-            }
-            if (keystoreProperties.containsKey("storeFile")) {
+            if (keystorePropertiesFile.exists() && keystoreProperties.containsKey("storeFile")) {
                 storeFile = file(keystoreProperties.getProperty("storeFile"))
-            }
-            if (keystoreProperties.containsKey("storePassword")) {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
                 storePassword = keystoreProperties.getProperty("storePassword")
             }
         }
@@ -64,9 +58,12 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("release")
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null) {
+                signingConfig = releaseSigning
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
             ndk {
                 debugSymbolLevel = "SYMBOL_TABLE"
             }
