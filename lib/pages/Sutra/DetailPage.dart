@@ -685,9 +685,7 @@ class _DetailPageState extends State<DetailPage> {
     final String audioUrl = _extractUrl(item['audio'] ?? '/');
     final bool hasAudio = audioUrl != '/';
 
-    return Container(
-      color: _isDarkMode ? Colors.black : Color.fromRGBO(246, 238, 217, 1.0),
-      child: Column(
+    return Column(
         children: [
           const SizedBox(height: 10),
           if (hasAudio && _audioMode != _AudioMode.tts) _buildAudioPlayer(audioUrl),
@@ -728,7 +726,6 @@ class _DetailPageState extends State<DetailPage> {
             ),
           ),
         ],
-      ),
     );
   }
 
@@ -949,11 +946,13 @@ class _DetailPageState extends State<DetailPage> {
                     ),
                     child: SelectableText.rich(
                       key: ValueKey(snapshot.data),
+                      showCursor: true,
+                      cursorWidth: 2.0,
+                      cursorColor: Colors.brown,
                       TextSpan(
                         children: highlightSearchTerm(
                           context,
-                          snapshot
-                              .data!,
+                          snapshot.data!,
                           widget.searchTerm,
                           _fontSize,
                         ),
@@ -1264,13 +1263,39 @@ class _DetailPageState extends State<DetailPage> {
     try {
       final response = await http.get(Uri.parse(detail));
       if (response.statusCode == 200) {
-        return response.body;
+        String body = response.body.replaceAll('\uFEFF', '').trimLeft();
+        body = body.replaceAll(RegExp(r'^\s*<!DOCTYPE[^>]*>\s*', dotAll: true), '');
+        if (body.startsWith('<html') || body.startsWith('<head') || body.startsWith('<body')) {
+          return _extractPlainText(body);
+        }
+        return body;
       } else {
         return 'Error: Failed to load content (Status: ${response.statusCode})';
       }
     } catch (e) {
       return 'Error: $e';
     }
+  }
+
+  String _extractPlainText(String html) {
+    String text = html
+        .replaceAll(RegExp(r'<script[^>]*>.*?</script>', dotAll: true), '')
+        .replaceAll(RegExp(r'<style[^>]*>.*?</style>', dotAll: true), '')
+        .replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '')
+        .replaceAll(RegExp(r'<br\s*/?>'), '\n')
+        .replaceAll(RegExp(r'<p[^>]*>'), '\n')
+        .replaceAll(RegExp(r'</p>'), '\n')
+        .replaceAll(RegExp(r'<[^>]*>'), '')
+        .replaceAll(RegExp(r'&nbsp;'), ' ')
+        .replaceAll(RegExp(r'\u00A0'), ' ')
+        .replaceAllMapped(RegExp(r'&#[0-9]+;'), (m) => String.fromCharCode(int.parse(m.group(0)!.substring(2, m.group(0)!.length - 1))))
+        .replaceAllMapped(RegExp(r'&#x[0-9a-fA-F]+;'), (m) => String.fromCharCode(int.parse(m.group(0)!.substring(3, m.group(0)!.length - 1), radix: 16)))
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'");
+    return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   Future<void> _copyContentToClipboard() async {

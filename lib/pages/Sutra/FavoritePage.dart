@@ -880,6 +880,7 @@ class _FavoritePageState extends State<FavoritePage> {
             ),
       floatingActionButton: _filteredFavorites.isNotEmpty
           ? FloatingActionButton(
+              heroTag: null,
               onPressed: () {
                 // Implement your action here, e.g., navigate to book reading screen
                 Navigator.push(

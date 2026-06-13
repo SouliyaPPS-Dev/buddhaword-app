@@ -1147,6 +1147,7 @@ class _CalendarPageState extends State<CalendarPage> {
             ),
       // Floating action button to scroll down by tapping
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         onPressed: _toggleScrollDirection, // Change scroll direction on press
         backgroundColor: Colors.transparent,
         child: Icon(

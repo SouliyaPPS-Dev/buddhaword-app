@@ -363,6 +363,7 @@ class _CategoryListPageState extends State<CategoryListPage> {
       ),
       floatingActionButton: _filteredData.isNotEmpty
           ? FloatingActionButton(
+              heroTag: null,
               onPressed: () {
                 // Implement your action here, e.g., navigate to book reading screen
                 Navigator.push(
