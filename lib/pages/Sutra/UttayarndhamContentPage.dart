@@ -67,6 +67,8 @@ class _UttayarndhamContentPageState
   File? _nextPrefetchedFile;
   int _ttsRunId = 0;
   double _fontSize = 18.0;
+  final Map<int, String> _contentCache = {};
+  late PageController _pageController;
 
   @override
   void initState() {
@@ -74,12 +76,21 @@ class _UttayarndhamContentPageState
     _currentUrl = widget.contentUrl;
     _currentTitle = widget.title;
     _currentIndex = widget.itemIndex ?? 0;
+    _pageController = PageController(initialPage: _currentIndex);
     _fetchContent();
     _loadFontSizeFromSharedPreferences();
     _loadFavoriteState();
   }
 
   Future<void> _fetchContent() async {
+    if (_contentCache.containsKey(_currentIndex)) {
+      setState(() {
+        _htmlContent = _contentCache[_currentIndex]!;
+        _isLoading = false;
+        _error = null;
+      });
+      return;
+    }
     setState(() {
       _isLoading = true;
       _error = null;
@@ -93,6 +104,7 @@ class _UttayarndhamContentPageState
             _htmlContent = extracted;
             _isLoading = false;
           });
+          _contentCache[_currentIndex] = extracted;
         }
       } else {
         if (mounted) {
@@ -113,28 +125,47 @@ class _UttayarndhamContentPageState
   }
 
   void _goToPrevItem() {
-    if (widget.items == null || _currentIndex <= 0) return;
-    _stopTts();
-    final prevItem = widget.items![_currentIndex - 1];
-    setState(() {
-      _currentIndex--;
-      _currentTitle = prevItem.title;
-      _currentUrl = 'https://uttayarndham.org${prevItem.url}';
-    });
-    _fetchContent();
-    _loadFavoriteState();
+    if (!_hasPrev || !_pageController.hasClients) return;
+    _pageController.previousPage(
+      duration: Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   void _goToNextItem() {
-    if (widget.items == null || _currentIndex >= widget.items!.length - 1) return;
+    if (!_hasNext || !_pageController.hasClients) return;
+    _pageController.nextPage(
+      duration: Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _onPageChanged(int index) {
+    if (index == _currentIndex) return;
+    if (_htmlContent != null && !_contentCache.containsKey(_currentIndex)) {
+      _contentCache[_currentIndex] = _htmlContent!;
+    }
     _stopTts();
-    final nextItem = widget.items![_currentIndex + 1];
+    final item = widget.items![index];
     setState(() {
-      _currentIndex++;
-      _currentTitle = nextItem.title;
-      _currentUrl = 'https://uttayarndham.org${nextItem.url}';
+      _currentIndex = index;
+      _currentTitle = item.title;
+      _currentUrl = 'https://uttayarndham.org${item.url}';
     });
-    _fetchContent();
+    if (_contentCache.containsKey(index)) {
+      setState(() {
+        _htmlContent = _contentCache[index]!;
+        _isLoading = false;
+        _error = null;
+      });
+    } else {
+      setState(() {
+        _htmlContent = null;
+        _isLoading = true;
+        _error = null;
+      });
+      _fetchContent();
+    }
     _loadFavoriteState();
   }
 
@@ -462,6 +493,7 @@ class _UttayarndhamContentPageState
     _player.dispose();
     _ttsChunks = [];
     _nextPrefetchedFile = null;
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -558,6 +590,38 @@ class _UttayarndhamContentPageState
                 ),
               ),
             ),
+          if (!_isFullScreen && _hasPrev)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton(
+                  icon: Icon(
+                    Icons.arrow_back_ios_new,
+                    color: Colors.brown.withOpacity(0.5),
+                    size: 30,
+                  ),
+                  onPressed: _goToPrevItem,
+                ),
+              ),
+            ),
+          if (!_isFullScreen && _hasNext)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton(
+                  icon: Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.brown.withOpacity(0.5),
+                    size: 30,
+                  ),
+                  onPressed: _goToNextItem,
+                ),
+              ),
+            ),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -586,6 +650,18 @@ class _UttayarndhamContentPageState
   }
 
   Widget _buildBody() {
+    if (widget.items != null && widget.items!.length > 1) {
+      return PageView.builder(
+        controller: _pageController,
+        itemCount: widget.items!.length,
+        onPageChanged: _onPageChanged,
+        itemBuilder: (context, index) => _buildItemContent(index),
+      );
+    }
+    return _buildSingleContent();
+  }
+
+  Widget _buildSingleContent() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
@@ -599,47 +675,61 @@ class _UttayarndhamContentPageState
         ),
       );
     }
-
     if (_htmlContent == null) return const Center(child: Text('No content'));
-
     final paragraphs = _extractParagraphs(_htmlContent!);
-    if (paragraphs.isEmpty) {
-      return const Center(child: Text('No text content'));
-    }
+    if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
+    return _buildParagraphsView(paragraphs);
+  }
 
-    return GestureDetector(
-      onHorizontalDragEnd: (details) {
-        if (details.primaryVelocity! > 0) {
-          if (_hasPrev) _goToPrevItem();
-        } else if (details.primaryVelocity! < 0) {
-          if (_hasNext) _goToNextItem();
-        }
-      },
-      child: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: paragraphs.map((text) {
-                final isHeading = text.length < 60;
-                return Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 4),
-                  child: SelectableText.rich(
-                    _buildHighlightedSpan(text),
-                    showCursor: true,
-                    style: TextStyle(
-                      fontSize: _fontSize,
-                      fontWeight: isHeading ? FontWeight.bold : FontWeight.normal,
-                      height: 1.6,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                );
-              }).toList(),
+  Widget _buildItemContent(int index) {
+    final cached = _contentCache[index];
+    if (cached != null) {
+      final paragraphs = _extractParagraphs(cached);
+      if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
+      return _buildParagraphsView(paragraphs);
+    }
+    if (index == _currentIndex) {
+      if (_isLoading) return const Center(child: CircularProgressIndicator());
+      if (_error != null) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_error!, style: TextStyle(color: Colors.red)),
+              SizedBox(height: 16),
+              ElevatedButton(onPressed: _fetchContent, child: Text('Retry')),
+            ],
+          ),
+        );
+      }
+      if (_htmlContent != null) {
+        final paragraphs = _extractParagraphs(_htmlContent!);
+        if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
+        return _buildParagraphsView(paragraphs);
+      }
+    }
+    return const Center(child: CircularProgressIndicator());
+  }
+
+  Widget _buildParagraphsView(List<String> paragraphs) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: paragraphs.map((text) {
+        final isHeading = text.length < 60;
+        return Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 4),
+          child: SelectableText.rich(
+            _buildHighlightedSpan(text),
+            showCursor: true,
+            style: TextStyle(
+              fontSize: _fontSize,
+              fontWeight: isHeading ? FontWeight.bold : FontWeight.normal,
+              height: 1.6,
+              letterSpacing: 0.3,
             ),
           ),
-        ],
-      ),
+        );
+      }).toList(),
     );
   }
 

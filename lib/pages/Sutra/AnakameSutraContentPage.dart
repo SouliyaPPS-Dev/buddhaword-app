@@ -66,10 +66,13 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   File? _nextPrefetchedFile;
   int _ttsRunId = 0;
   double _fontSize = 18.0;
+  late PageController _pageController;
+  final Map<int, String> _contentCache = {};
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: widget.itemIndex ?? 0);
     _currentUrl = widget.contentUrl;
     _currentTitle = widget.title;
     _currentIndex = widget.itemIndex ?? 0;
@@ -90,6 +93,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
         if (decoded.startsWith('\uFEFF')) {
           decoded = decoded.substring(1);
         }
+        _contentCache[_currentIndex] = decoded;
         if (mounted) {
           setState(() {
             _htmlContent = decoded;
@@ -115,31 +119,60 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   }
 
   void _goToPrevItem() {
-    if (widget.items == null || _currentIndex <= 0) return;
-    _stopTts();
-    final prevItem = widget.items![_currentIndex - 1];
-    setState(() {
-      _currentIndex--;
-      _currentTitle = prevItem.title;
-      _currentUrl = _resolveUrl(prevItem.url);
-    });
-    _fetchContent();
-    _loadFavoriteState();
+    if (_hasPrev) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   void _goToNextItem() {
-    if (widget.items == null || _currentIndex >= widget.items!.length - 1) {
-      return;
+    if (_hasNext) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     }
+  }
+
+  void _onPageChanged(int index) {
+    if (widget.items == null) return;
     _stopTts();
-    final nextItem = widget.items![_currentIndex + 1];
+    final item = widget.items![index];
     setState(() {
-      _currentIndex++;
-      _currentTitle = nextItem.title;
-      _currentUrl = _resolveUrl(nextItem.url);
+      _currentIndex = index;
+      _currentTitle = item.title;
+      _currentUrl = _resolveUrl(item.url);
     });
-    _fetchContent();
     _loadFavoriteState();
+    if (!_contentCache.containsKey(index)) {
+      _fetchContentForIndex(index);
+    }
+  }
+
+  Future<void> _fetchContentForIndex(int index) async {
+    if (widget.items == null) return;
+    final item = widget.items![index];
+    final url = _resolveUrl(item.url);
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        String decoded = utf8.decode(response.bodyBytes);
+        if (decoded.startsWith('\uFEFF')) {
+          decoded = decoded.substring(1);
+        }
+        _contentCache[index] = decoded;
+        if (mounted && index == _currentIndex) {
+          setState(() {
+            _htmlContent = decoded;
+            _isLoading = false;
+          });
+        } else if (mounted) {
+          setState(() {});
+        }
+      }
+    } catch (_) {}
   }
 
   String _resolveUrl(String href) {
@@ -540,6 +573,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     _durationSubscription?.cancel();
     _positionSubscription?.cancel();
     _player.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -639,6 +673,38 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
                 ),
               ),
             ),
+          if (!_isFullScreen && _hasPrev)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton(
+                  icon: Icon(
+                    Icons.arrow_back_ios_new,
+                    color: Colors.brown.withOpacity(0.5),
+                    size: 30,
+                  ),
+                  onPressed: _goToPrevItem,
+                ),
+              ),
+            ),
+          if (!_isFullScreen && _hasNext)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton(
+                  icon: Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.brown.withOpacity(0.5),
+                    size: 30,
+                  ),
+                  onPressed: _goToNextItem,
+                ),
+              ),
+            ),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -667,6 +733,18 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   }
 
   Widget _buildBody() {
+    if (widget.items != null && widget.items!.length > 1) {
+      return PageView.builder(
+        controller: _pageController,
+        itemCount: widget.items!.length,
+        onPageChanged: _onPageChanged,
+        itemBuilder: (context, index) => _buildItemContent(index),
+      );
+    }
+    return _buildSingleContent();
+  }
+
+  Widget _buildSingleContent() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
@@ -680,49 +758,63 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
         ),
       );
     }
-
     if (_htmlContent == null) return const Center(child: Text('No content'));
-
     final paragraphs = _extractParagraphs(_htmlContent!);
-    if (paragraphs.isEmpty) {
-      return const Center(child: Text('No text content'));
-    }
+    if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
+    return _buildParagraphsView(paragraphs);
+  }
 
-    return GestureDetector(
-      onHorizontalDragEnd: (details) {
-        if (details.primaryVelocity! > 0) {
-          if (_hasPrev) _goToPrevItem();
-        } else if (details.primaryVelocity! < 0) {
-          if (_hasNext) _goToNextItem();
-        }
-      },
-      child: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: paragraphs.map((text) {
-                final isHeading = text.length < 60;
-                return Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 4),
-                  child: SelectableText.rich(
-                    _buildHighlightedSpan(text),
-                    showCursor: true,
-                    style: TextStyle(
-                      fontSize: _fontSize,
-                      fontWeight: isHeading
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                      height: 1.6,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                );
-              }).toList(),
+  Widget _buildItemContent(int index) {
+    final cached = _contentCache[index];
+    if (cached != null) {
+      final paragraphs = _extractParagraphs(cached);
+      if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
+      return _buildParagraphsView(paragraphs);
+    }
+    if (index == _currentIndex) {
+      if (_isLoading) return const Center(child: CircularProgressIndicator());
+      if (_error != null) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_error!, style: TextStyle(color: Colors.red)),
+              SizedBox(height: 16),
+              ElevatedButton(onPressed: _fetchContent, child: Text('Retry')),
+            ],
+          ),
+        );
+      }
+      if (_htmlContent != null) {
+        final paragraphs = _extractParagraphs(_htmlContent!);
+        if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
+        return _buildParagraphsView(paragraphs);
+      }
+    }
+    return const Center(child: CircularProgressIndicator());
+  }
+
+  Widget _buildParagraphsView(List<String> paragraphs) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: paragraphs.map((text) {
+        final isHeading = text.length < 60;
+        return Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 4),
+          child: SelectableText.rich(
+            _buildHighlightedSpan(text),
+            showCursor: true,
+            style: TextStyle(
+              fontSize: _fontSize,
+              fontWeight: isHeading
+                  ? FontWeight.bold
+                  : FontWeight.normal,
+              height: 1.6,
+              letterSpacing: 0.3,
             ),
           ),
-        ],
-      ),
+        );
+      }).toList(),
     );
   }
 

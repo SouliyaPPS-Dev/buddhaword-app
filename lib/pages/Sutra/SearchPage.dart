@@ -846,12 +846,14 @@ class _SearchPageState extends State<SearchPage> {
             Expanded(
               child: _selectedSource == 'main'
                   ? _buildMainResults()
-                  : _buildExternalResults(),
+                  : _selectedSource == 'all'
+                      ? _buildAllResults()
+                      : _buildExternalResults(),
             ),
           ],
         ),
       ),
-      floatingActionButton: _selectedSource == 'main' && _filteredData.isNotEmpty
+      floatingActionButton: (_selectedSource == 'main' || _selectedSource == 'all') && _filteredData.isNotEmpty
           ? FloatingActionButton(
               heroTag: null,
               onPressed: () {
@@ -879,295 +881,237 @@ class _SearchPageState extends State<SearchPage> {
   Widget _buildMainResults() {
     return ListView.builder(
       itemCount: _filteredData.length,
-      itemBuilder: (context, index) {
-        final rowData = _filteredData[index];
-        final title = rowData.length > 1 ? rowData[1].toString() : '';
-        final audio = rowData.length > 5 ? rowData[5].toString() : '/';
+      itemBuilder: (context, index) => _buildMainResultCard(index),
+    );
+  }
 
-        return Card(
-          elevation: 8,
-          margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15.0),
-          ),
-          shadowColor: Color.fromARGB(
-            255,
-            91,
-            50,
-            35,
-          ).withOpacity(0.9),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15.0),
-            ),
-            child: ListTile(
-              title: Padding(
-                padding: const EdgeInsets.only(
-                  top: 1.5,
+  Widget _buildMainResultCard(int index) {
+    final rowData = _filteredData[index];
+    final title = rowData.length > 1 ? rowData[1].toString() : '';
+    final audio = rowData.length > 5 ? rowData[5].toString() : '/';
+
+    return Card(
+      elevation: 8,
+      margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15.0),
+      ),
+      shadowColor: Color.fromARGB(255, 91, 50, 35).withOpacity(0.9),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15.0),
+        ),
+        child: ListTile(
+          title: Padding(
+            padding: const EdgeInsets.only(top: 1.5),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Expanded(
+                  child: Consumer<ThemeProvider>(
+                    builder: (context, themeProvider, child) {
+                      return RichText(
+                        text: highlightSearchTerm(
+                          context,
+                          title,
+                          _searchController.text,
+                        ),
+                      );
+                    },
+                  ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Expanded(
-                      child: Consumer<ThemeProvider>(
-                        builder: (context, themeProvider, child) {
-                          return RichText(
-                            text: highlightSearchTerm(
-                              context,
-                              title,
-                              _searchController.text,
-                            ),
-                          );
+                SizedBox(width: 10),
+                if (audio != '/')
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: Colors.transparent,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.brown.shade600,
+                            Colors.brown.shade600,
+                            Colors.brown.shade600,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          _currentlyPlayingIndex == index && _isPlaying
+                              ? Icons.pause
+                              : Icons.play_arrow,
+                          color: Colors.white,
+                        ),
+                        iconSize: 20,
+                        onPressed: () async {
+                          await _playPauseAudio(index, audio);
                         },
                       ),
                     ),
-                    SizedBox(
-                      width: 10,
-                    ),
-                    if (audio != '/')
-                      CircleAvatar(
-                        radius:
-                            22,
-                        backgroundColor: Colors
-                            .transparent,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.brown.shade600,
-                                Colors.brown.shade600,
-                                Colors.brown.shade600,
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: Icon(
-                              _currentlyPlayingIndex == index &&
-                                      _isPlaying
-                                  ? Icons.pause
-                                  : Icons.play_arrow,
-                              color: Colors.white,
-                            ),
-                            iconSize: 20,
-                            onPressed: () async {
-                              await _playPauseAudio(index, audio);
-                            },
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              trailing: IconButton(
-                icon: Icon(
-                  _isItemFavorited(rowData)
-                      ? Icons.favorite
-                      : Icons.favorite_border,
-                  color: Colors.red,
-                ),
-                onPressed: () => _toggleFavoriteItem(rowData),
-              ),
-              subtitle: audio != '/'
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_currentlyPlayingIndex == index)
-                          Column(
-                            children: [
-                              if (audio.contains('youtube.com') ||
-                                  audio.contains('youtu.be'))
-                                if (_ytController != null &&
-                                    _isPlaying)
-                                  Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(
-                                          vertical: 8.0,
-                                        ),
-                                    child: yt.YoutubePlayer(
-                                      controller: _ytController!,
-                                      aspectRatio: 16 / 9,
-                                    ),
-                                  )
-                                else
-                                  const SizedBox.shrink()
-                              else
-                                Column(
+                  ),
+              ],
+            ),
+          ),
+          trailing: IconButton(
+            icon: Icon(
+              _isItemFavorited(rowData)
+                  ? Icons.favorite
+                  : Icons.favorite_border,
+              color: Colors.red,
+            ),
+            onPressed: () => _toggleFavoriteItem(rowData),
+          ),
+          subtitle: audio != '/'
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_currentlyPlayingIndex == index)
+                      Column(
+                        children: [
+                          if (audio.contains('youtube.com') ||
+                              audio.contains('youtu.be'))
+                            if (_ytController != null && _isPlaying)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: yt.YoutubePlayer(
+                                  controller: _ytController!,
+                                  aspectRatio: 16 / 9,
+                                ),
+                              )
+                            else
+                              const SizedBox.shrink()
+                          else
+                            Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment
-                                              .spaceBetween,
-                                      children: [
-                                        IconButton(
-                                          icon: Icon(
-                                            Icons.skip_previous,
-                                          ),
-                                          onPressed: () {
-                                            final previousIndex =
-                                                _findPreviousValidAudioIndex(
-                                                  index,
-                                                );
-                                            if (previousIndex != -1) {
-                                              final previousAudio =
-                                                  _filteredData[previousIndex].length > 5 ? _filteredData[previousIndex][5]
-                                                      .toString() : '/';
-                                              _playPauseAudio(
-                                                previousIndex,
-                                                previousAudio,
-                                              );
-                                            }
-                                          },
-                                        ),
-                                        Expanded(
-                                          child: Slider(
-                                            min: 0.0,
-                                            max: _duration
-                                                .inMilliseconds
-                                                .toDouble(),
-                                            value: _position
-                                                .inMilliseconds
-                                                .toDouble()
-                                                .clamp(
-                                                  0.0,
-                                                  _duration
-                                                      .inMilliseconds
-                                                      .toDouble(),
-                                                ),
-                                            onChanged: (value) {
-                                              _seek(
-                                                Duration(
-                                                  milliseconds: value
-                                                      .toInt()
-                                                      .clamp(
-                                                        0,
-                                                        _duration
-                                                            .inMilliseconds,
-                                                      ),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: Icon(Icons.skip_next),
-                                          onPressed: () {
-                                            final nextIndex =
-                                                _findNextValidAudioIndex(
-                                                  index,
-                                                );
-                                            if (nextIndex != -1) {
-                                              final nextAudio =
-                                                  _filteredData[nextIndex].length > 5 ? _filteredData[nextIndex][5]
-                                                      .toString() : '/';
-                                              _playPauseAudio(
-                                                nextIndex,
-                                                nextAudio,
-                                              );
-                                            }
-                                          },
-                                        ),
-                                        SizedBox(width: 0),
-                                        IconButton(
-                                          icon: Icon(
-                                            _isRepeating
-                                                ? Icons.repeat_one
-                                                : Icons.repeat,
-                                          ),
-                                          color: Colors
-                                              .brown,
-                                          iconSize: 25,
-                                          onPressed: () {
-                                            setState(() {
-                                              _isRepeating =
-                                                  !_isRepeating;
-                                              _player.setLoopMode(
-                                                _isRepeating
-                                                    ? LoopMode.one
-                                                    : LoopMode.off,
-                                              );
-                                            });
-                                          },
-                                        ),
-                                        SizedBox(width: 0),
-                                        IconButton(
-                                          icon: Icon(Icons.download),
-                                          color: Colors
-                                              .brown,
-                                          iconSize: 25,
-                                          onPressed: () {
-                                            _downloadAudio(audio);
-                                          },
-                                        ),
-                                      ],
+                                    IconButton(
+                                      icon: Icon(Icons.skip_previous),
+                                      onPressed: () {
+                                        final previousIndex =
+                                            _findPreviousValidAudioIndex(index);
+                                        if (previousIndex != -1) {
+                                          final previousAudio =
+                                              _filteredData[previousIndex].length > 5
+                                                  ? _filteredData[previousIndex][5].toString()
+                                                  : '/';
+                                          _playPauseAudio(previousIndex, previousAudio);
+                                        }
+                                      },
                                     ),
-                                    Padding(
-                                      padding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 16.0,
-                                          ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment
-                                                .spaceBetween,
-                                        children: [
-                                          Text(
-                                            _formatDuration(
-                                              _position,
+                                    Expanded(
+                                      child: Slider(
+                                        min: 0.0,
+                                        max: _duration.inMilliseconds.toDouble(),
+                                        value: _position.inMilliseconds.toDouble().clamp(
+                                          0.0,
+                                          _duration.inMilliseconds.toDouble(),
+                                        ),
+                                        onChanged: (value) {
+                                          _seek(
+                                            Duration(
+                                              milliseconds: value.toInt().clamp(
+                                                0,
+                                                _duration.inMilliseconds,
+                                              ),
                                             ),
-                                          ),
-                                          Text(
-                                            _formatDuration(
-                                              _duration - _position,
-                                            ),
-                                          ),
-                                        ],
+                                          );
+                                        },
                                       ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.skip_next),
+                                      onPressed: () {
+                                        final nextIndex =
+                                            _findNextValidAudioIndex(index);
+                                        if (nextIndex != -1) {
+                                          final nextAudio =
+                                              _filteredData[nextIndex].length > 5
+                                                  ? _filteredData[nextIndex][5].toString()
+                                                  : '/';
+                                          _playPauseAudio(nextIndex, nextAudio);
+                                        }
+                                      },
+                                    ),
+                                    SizedBox(width: 0),
+                                    IconButton(
+                                      icon: Icon(
+                                        _isRepeating ? Icons.repeat_one : Icons.repeat,
+                                      ),
+                                      color: Colors.brown,
+                                      iconSize: 25,
+                                      onPressed: () {
+                                        setState(() {
+                                          _isRepeating = !_isRepeating;
+                                          _player.setLoopMode(
+                                            _isRepeating ? LoopMode.one : LoopMode.off,
+                                          );
+                                        });
+                                      },
+                                    ),
+                                    SizedBox(width: 0),
+                                    IconButton(
+                                      icon: Icon(Icons.download),
+                                      color: Colors.brown,
+                                      iconSize: 25,
+                                      onPressed: () {
+                                        _downloadAudio(audio);
+                                      },
                                     ),
                                   ],
                                 ),
-                            ],
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(_formatDuration(_position)),
+                                      Text(_formatDuration(_duration - _position)),
+                                    ],
+                                  ),
+                                ),
+                              ],
                           ),
-                      ],
-                    )
-                  : null,
-              onTap: () async {
-                {
-                  if (audio != '/') {
-                    await _playPauseAudio(index, audio);
-                  }
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => DetailPage(
-                        items: _filteredData
-                            .map(
-                              (e) => {
-                                'id': e.isNotEmpty ? e[0] : '',
-                                'title': e.length > 1 ? e[1] : '',
-                                'details': e.length > 3 ? e[3] : '',
-                                'category': e.length > 4 ? e[4] : '',
-                                'audio': e.length > 5 ? e[5] : '/',
-                              },
-                            )
-                            .toList(),
-                        initialIndex: index,
-                        searchTerm: _searchTerm,
-                        onFavoriteChanged: () {
-                          _loadFavorites();
-                        },
+                        ],
                       ),
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-        );
-      },
+                  ],
+                )
+              : null,
+          onTap: () async {
+            if (audio != '/') {
+              await _playPauseAudio(index, audio);
+            }
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => DetailPage(
+                  items: _filteredData
+                      .map(
+                        (e) => {
+                          'id': e.isNotEmpty ? e[0] : '',
+                          'title': e.length > 1 ? e[1] : '',
+                          'details': e.length > 3 ? e[3] : '',
+                          'category': e.length > 4 ? e[4] : '',
+                          'audio': e.length > 5 ? e[5] : '/',
+                        },
+                      )
+                      .toList(),
+                  initialIndex: index,
+                  searchTerm: _searchTerm,
+                  onFavoriteChanged: () {
+                    _loadFavorites();
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -1203,74 +1147,110 @@ class _SearchPageState extends State<SearchPage> {
 
     return ListView.builder(
       itemCount: _externalResults.length,
-      itemBuilder: (context, index) {
-        final result = _externalResults[index];
-        final source = result['source'] as String;
-        final sourceLabel = result['sourceLabel'] as String;
-        final title = result['title'] as String;
-        final subtitle = result['subtitle'] as String? ?? '';
+      itemBuilder: (context, index) => _buildExternalResultCard(_externalResults[index]),
+    );
+  }
 
-        return Card(
-          elevation: 4,
-          margin: EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12.0),
+  Widget _buildExternalResultCard(Map<String, dynamic> result) {
+    final source = result['source'] as String;
+    final sourceLabel = result['sourceLabel'] as String;
+    final title = result['title'] as String;
+    final subtitle = result['subtitle'] as String? ?? '';
+
+    return Card(
+      elevation: 4,
+      margin: EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: ListTile(
+        leading: CircleAvatar(
+          radius: 18,
+          backgroundColor: _sourceColor(source).withOpacity(0.15),
+          child: Icon(
+            source == 'etipitaka'
+                ? Icons.menu_book
+                : Icons.language,
+            color: _sourceColor(source),
+            size: 20,
           ),
-          child: ListTile(
-            leading: CircleAvatar(
-              radius: 18,
-              backgroundColor: _sourceColor(source).withOpacity(0.15),
-              child: Icon(
-                source == 'etipitaka'
-                    ? Icons.menu_book
-                    : source == 'anakame'
-                        ? Icons.language
-                        : Icons.language,
-                color: _sourceColor(source),
-                size: 20,
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
               ),
             ),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: _sourceColor(source).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                sourceLabel,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _sourceColor(source),
                 ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _sourceColor(source).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    sourceLabel,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: _sourceColor(source),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-            subtitle: subtitle.isNotEmpty
-                ? Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                  )
-                : null,
-            onTap: () {
-              _navigateToSource(source, result['payload'] as Map<String, dynamic>);
-            },
+          ],
+        ),
+        subtitle: subtitle.isNotEmpty
+            ? Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              )
+            : null,
+        onTap: () {
+          _navigateToSource(source, result['payload'] as Map<String, dynamic>);
+        },
+      ),
+    );
+  }
+
+  Widget _buildAllResults() {
+    final hasMain = _filteredData.isNotEmpty;
+    final hasExternal = _externalResults.isNotEmpty;
+
+    if (!hasMain && !hasExternal) {
+      if (_searchTerm.isNotEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'ບໍ່ພົບຜົນການຄົ້ນຫາ',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+            ],
           ),
         );
+      }
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final mainCount = hasMain ? _filteredData.length : 0;
+    final extCount = hasExternal ? _externalResults.length : 0;
+
+    return ListView.builder(
+      itemCount: mainCount + extCount,
+      itemBuilder: (context, index) {
+        if (index < mainCount) {
+          return _buildMainResultCard(index);
+        }
+        return _buildExternalResultCard(_externalResults[index - mainCount]);
       },
     );
   }
