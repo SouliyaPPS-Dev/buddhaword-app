@@ -10,9 +10,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../services/EtipitakaDatabaseService.dart';
+import '../../services/etipitaka_database_service.dart';
 import '../../themes/ThemeProvider.dart';
-import 'EtipitakaPage.dart';
+import 'etipitaka_page.dart';
 
 class EtipitakaContentPage extends StatefulWidget {
   final String title;
@@ -35,10 +35,10 @@ class EtipitakaContentPage extends StatefulWidget {
   });
 
   @override
-  _EtipitakaContentPageState createState() => _EtipitakaContentPageState();
+  EtipitakaContentPageState createState() => EtipitakaContentPageState();
 }
 
-class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
+class EtipitakaContentPageState extends State<EtipitakaContentPage> {
   String? _plainText;
   bool _isLoading = true;
   String? _error;
@@ -90,7 +90,10 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
     });
     try {
       final content = await _dbService.getContent(
-          _currentCode, _currentVolume, _currentPage);
+        _currentCode,
+        _currentVolume,
+        _currentPage,
+      );
 
       if (mounted) {
         setState(() {
@@ -138,8 +141,7 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
         .toList();
 
     if (lines.length < 3) {
-      final words =
-          text.split(' ').where((w) => w.trim().isNotEmpty).toList();
+      final words = text.split(' ').where((w) => w.trim().isNotEmpty).toList();
       final grouped = <String>[];
       for (int i = 0; i < words.length; i += 20) {
         final end = (i + 20 < words.length) ? i + 20 : words.length;
@@ -337,12 +339,18 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
       return;
     }
 
-    if (mounted) setState(() { _isTtsLoading = false; });
+    if (mounted) {
+      setState(() {
+        _isTtsLoading = false;
+      });
+    }
     _ttsChunkBytes.add(await firstFile.readAsBytes());
     await _player.setFilePath(firstFile.path);
     await _player.setSpeed(0.85);
     await _player.play();
-    try { await firstFile.delete(); } catch (_) {}
+    try {
+      await firstFile.delete();
+    } catch (_) {}
     _prefetchChunk(1);
   }
 
@@ -362,8 +370,7 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
   Future<void> _downloadAudio() async {
     if (_ttsChunkBytes.isEmpty) return;
     final dir = await getTemporaryDirectory();
-    final fileName =
-        'etipitaka_${DateTime.now().millisecondsSinceEpoch}.mp3';
+    final fileName = 'etipitaka_${DateTime.now().millisecondsSinceEpoch}.mp3';
     final file = File('${dir.path}/$fileName');
     final allBytes = <int>[];
     for (final bytes in _ttsChunkBytes) {
@@ -371,9 +378,9 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
     }
     await file.writeAsBytes(allBytes);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved: $fileName')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Saved: $fileName')));
     }
   }
 
@@ -477,8 +484,10 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
                     heroTag: 'fab_prev',
                     onPressed: _isLoading ? null : _goToPrevPage,
                     backgroundColor: const Color(0xFFF5F5F5),
-                    child: const Icon(Icons.arrow_back,
-                        color: Color.fromARGB(241, 179, 93, 78)),
+                    child: const Icon(
+                      Icons.arrow_back,
+                      color: Color.fromARGB(241, 179, 93, 78),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -489,8 +498,10 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
                     heroTag: 'fab_minus',
                     onPressed: _decreaseFontSize,
                     backgroundColor: const Color(0xFFF5F5F5),
-                    child: const Icon(Icons.remove,
-                        color: Color.fromARGB(241, 179, 93, 78)),
+                    child: const Icon(
+                      Icons.remove,
+                      color: Color.fromARGB(241, 179, 93, 78),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -501,8 +512,10 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
                     heroTag: 'fab_plus',
                     onPressed: _increaseFontSize,
                     backgroundColor: const Color(0xFFF5F5F5),
-                    child: const Icon(Icons.add,
-                        color: Color.fromARGB(241, 179, 93, 78)),
+                    child: const Icon(
+                      Icons.add,
+                      color: Color.fromARGB(241, 179, 93, 78),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -512,8 +525,9 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
                   child: FloatingActionButton(
                     heroTag: 'fab_volume',
                     onPressed: _isTtsLoading ? null : _speakContent,
-                    backgroundColor:
-                        _ttsActive ? Colors.brown : const Color(0xFFF5F5F5),
+                    backgroundColor: _ttsActive
+                        ? Colors.brown
+                        : const Color(0xFFF5F5F5),
                     child: _isTtsLoading
                         ? SizedBox(
                             width: 20,
@@ -539,8 +553,10 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
                     heroTag: 'fab_next',
                     onPressed: _isLoading ? null : _goToNextPage,
                     backgroundColor: const Color(0xFFF5F5F5),
-                    child: const Icon(Icons.arrow_forward,
-                        color: Color.fromARGB(241, 179, 93, 78)),
+                    child: const Icon(
+                      Icons.arrow_forward,
+                      color: Color.fromARGB(241, 179, 93, 78),
+                    ),
                   ),
                 ),
               ],
@@ -559,10 +575,7 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
           children: [
             Text(_error!, style: TextStyle(color: Colors.red)),
             SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _fetchContent,
-              child: Text('Retry'),
-            ),
+            ElevatedButton(onPressed: _fetchContent, child: Text('Retry')),
           ],
         ),
       );
@@ -610,8 +623,9 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
                     showCursor: true,
                     style: TextStyle(
                       fontSize: _fontSize,
-                      fontWeight:
-                          isHeading ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isHeading
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                       height: 1.6,
                       letterSpacing: 0.3,
                     ),
@@ -642,13 +656,14 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
                   Expanded(
                     child: Slider(
                       min: 0,
-                      max: _duration.inMilliseconds
-                          .toDouble()
-                          .clamp(1, double.infinity),
+                      max: _duration.inMilliseconds.toDouble().clamp(
+                        1,
+                        double.infinity,
+                      ),
                       value: _position.inMilliseconds.toDouble().clamp(
-                            0,
-                            _duration.inMilliseconds.toDouble(),
-                          ),
+                        0,
+                        _duration.inMilliseconds.toDouble(),
+                      ),
                       onChanged: (v) =>
                           _player.seek(Duration(milliseconds: v.toInt())),
                     ),
@@ -662,8 +677,7 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
                     IconButton(
                       icon: Icon(Icons.download, color: Colors.brown, size: 20),
                       onPressed: _downloadAudio,
-                      constraints:
-                          BoxConstraints(minWidth: 36, minHeight: 36),
+                      constraints: BoxConstraints(minWidth: 36, minHeight: 36),
                       padding: EdgeInsets.zero,
                     ),
                   IconButton(
@@ -686,8 +700,7 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
   }
 
   void _decreaseFontSize() {
-    setState(
-        () => _fontSize = _fontSize > 2.0 ? _fontSize - 2.0 : _fontSize);
+    setState(() => _fontSize = _fontSize > 2.0 ? _fontSize - 2.0 : _fontSize);
     _saveFontSizeToSharedPreferences(_fontSize);
   }
 
@@ -724,14 +737,16 @@ class _EtipitakaContentPageState extends State<EtipitakaContentPage> {
       if (idx > start) {
         spans.add(TextSpan(text: text.substring(start, idx)));
       }
-      spans.add(TextSpan(
-        text: text.substring(idx, idx + query.length),
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.orange.shade800,
-          backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+      spans.add(
+        TextSpan(
+          text: text.substring(idx, idx + query.length),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.orange.shade800,
+            backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+          ),
         ),
-      ));
+      );
       start = idx + query.length;
       idx = lower.indexOf(qLower, start);
     }

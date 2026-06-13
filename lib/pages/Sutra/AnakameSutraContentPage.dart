@@ -124,7 +124,9 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   }
 
   void _goToNextItem() {
-    if (widget.items == null || _currentIndex >= widget.items!.length - 1) return;
+    if (widget.items == null || _currentIndex >= widget.items!.length - 1) {
+      return;
+    }
     _stopTts();
     final nextItem = widget.items![_currentIndex + 1];
     setState(() {
@@ -434,7 +436,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
           offset += bytes.length;
         }
         audioData = allBytes;
-        fileName = '${_currentTitle}.mp3';
+        fileName = '$_currentTitle.mp3';
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -484,7 +486,8 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   }
 
   bool get _hasPrev => widget.items != null && _currentIndex > 0;
-  bool get _hasNext => widget.items != null && _currentIndex < widget.items!.length - 1;
+  bool get _hasNext =>
+      widget.items != null && _currentIndex < widget.items!.length - 1;
 
   bool _isFullScreen = false;
 
@@ -567,80 +570,100 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       floatingActionButton: _isFullScreen
           ? null
           : Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: FloatingActionButton(
-              heroTag: 'fab_prev',
-              onPressed: _hasPrev ? _goToPrevItem : null,
-              backgroundColor: _hasPrev ? const Color(0xFFF5F5F5) : Colors.grey.shade300,
-              child: Icon(Icons.arrow_back,
-                  color: _hasPrev ? const Color.fromARGB(241, 179, 93, 78) : Colors.grey),
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: FloatingActionButton(
-              heroTag: 'fab_minus',
-              onPressed: _decreaseFontSize,
-              backgroundColor: const Color(0xFFF5F5F5),
-              child: const Icon(Icons.remove, color: Color.fromARGB(241, 179, 93, 78)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: FloatingActionButton(
-              heroTag: 'fab_plus',
-              onPressed: _increaseFontSize,
-              backgroundColor: const Color(0xFFF5F5F5),
-              child: const Icon(Icons.add, color: Color.fromARGB(241, 179, 93, 78)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: FloatingActionButton(
-              heroTag: 'fab_volume',
-              onPressed: _isTtsLoading ? null : _speakContent,
-              backgroundColor: _ttsActive ? Colors.brown : const Color(0xFFF5F5F5),
-              child: _isTtsLoading
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.brown,
-                      ),
-                    )
-                  : Icon(
-                      _ttsActive ? Icons.stop : Icons.volume_up,
-                      color: _ttsActive
-                          ? Colors.white
-                          : const Color.fromARGB(241, 179, 93, 78),
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: FloatingActionButton(
+                    heroTag: 'fab_prev',
+                    onPressed: _hasPrev ? _goToPrevItem : null,
+                    backgroundColor: _hasPrev
+                        ? const Color(0xFFF5F5F5)
+                        : Colors.grey.shade300,
+                    child: Icon(
+                      Icons.arrow_back,
+                      color: _hasPrev
+                          ? const Color.fromARGB(241, 179, 93, 78)
+                          : Colors.grey,
                     ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: FloatingActionButton(
+                    heroTag: 'fab_minus',
+                    onPressed: _decreaseFontSize,
+                    backgroundColor: const Color(0xFFF5F5F5),
+                    child: const Icon(
+                      Icons.remove,
+                      color: Color.fromARGB(241, 179, 93, 78),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: FloatingActionButton(
+                    heroTag: 'fab_plus',
+                    onPressed: _increaseFontSize,
+                    backgroundColor: const Color(0xFFF5F5F5),
+                    child: const Icon(
+                      Icons.add,
+                      color: Color.fromARGB(241, 179, 93, 78),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: FloatingActionButton(
+                    heroTag: 'fab_volume',
+                    onPressed: _isTtsLoading ? null : _speakContent,
+                    backgroundColor: _ttsActive
+                        ? Colors.brown
+                        : const Color(0xFFF5F5F5),
+                    child: _isTtsLoading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.brown,
+                            ),
+                          )
+                        : Icon(
+                            _ttsActive ? Icons.stop : Icons.volume_up,
+                            color: _ttsActive
+                                ? Colors.white
+                                : const Color.fromARGB(241, 179, 93, 78),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: FloatingActionButton(
+                    heroTag: 'fab_next',
+                    onPressed: _hasNext ? _goToNextItem : null,
+                    backgroundColor: _hasNext
+                        ? const Color(0xFFF5F5F5)
+                        : Colors.grey.shade300,
+                    child: Icon(
+                      Icons.arrow_forward,
+                      color: _hasNext
+                          ? const Color.fromARGB(241, 179, 93, 78)
+                          : Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: FloatingActionButton(
-              heroTag: 'fab_next',
-              onPressed: _hasNext ? _goToNextItem : null,
-              backgroundColor: _hasNext ? const Color(0xFFF5F5F5) : Colors.grey.shade300,
-              child: Icon(Icons.arrow_forward,
-                  color: _hasNext ? const Color.fromARGB(241, 179, 93, 78) : Colors.grey),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -688,7 +711,9 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
                     showCursor: true,
                     style: TextStyle(
                       fontSize: _fontSize,
-                      fontWeight: isHeading ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isHeading
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                       height: 1.6,
                       letterSpacing: 0.3,
                     ),
@@ -719,13 +744,14 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
                   Expanded(
                     child: Slider(
                       min: 0,
-                      max: _duration.inMilliseconds
-                          .toDouble()
-                          .clamp(1, double.infinity),
+                      max: _duration.inMilliseconds.toDouble().clamp(
+                        1,
+                        double.infinity,
+                      ),
                       value: _position.inMilliseconds.toDouble().clamp(
-                            0,
-                            _duration.inMilliseconds.toDouble(),
-                          ),
+                        0,
+                        _duration.inMilliseconds.toDouble(),
+                      ),
                       onChanged: (v) =>
                           _player.seek(Duration(milliseconds: v.toInt())),
                     ),
@@ -799,14 +825,16 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       if (idx > start) {
         spans.add(TextSpan(text: text.substring(start, idx)));
       }
-      spans.add(TextSpan(
-        text: text.substring(idx, idx + query.length),
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.orange.shade800,
-          backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+      spans.add(
+        TextSpan(
+          text: text.substring(idx, idx + query.length),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.orange.shade800,
+            backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+          ),
         ),
-      ));
+      );
       start = idx + query.length;
       idx = lower.indexOf(qLower, start);
     }

@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../services/EtipitakaDatabaseService.dart';
+import '../../services/etipitaka_database_service.dart';
 import '../../themes/ThemeProvider.dart';
-import 'EtipitakaContentPage.dart';
+import 'etipitaka_content_page.dart';
 
 class EtipitakaItem {
   final int volume;
@@ -27,10 +27,10 @@ class EtipitakaSearchPage extends StatefulWidget {
   const EtipitakaSearchPage({super.key});
 
   @override
-  _EtipitakaSearchPageState createState() => _EtipitakaSearchPageState();
+  EtipitakaSearchPageState createState() => EtipitakaSearchPageState();
 }
 
-class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
+class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
   final List<_CategoryInfo> _categories = const [
     _CategoryInfo('thai', 'ไทย (ฉบับหลวง)', Icons.book),
     _CategoryInfo('pali', 'บาลี (สยามรัฐ)', Icons.menu_book),
@@ -106,6 +106,7 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
   }
 
   void _clearSearch() {
+    _debounceTimer?.cancel();
     _searchController.clear();
     setState(() {
       _allResults = [];
@@ -133,7 +134,9 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
     }
 
     final start = idx > 60 ? idx - 60 : 0;
-    final end = (idx + query.length + 90) > cleaned.length ? cleaned.length : (idx + query.length + 90);
+    final end = (idx + query.length + 90) > cleaned.length
+        ? cleaned.length
+        : (idx + query.length + 90);
     final prefix = start > 0 ? '...' : '';
     final suffix = end < cleaned.length ? '...' : '';
     return '$prefix${cleaned.substring(start, end)}$suffix';
@@ -150,14 +153,16 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
       if (idx > start) {
         spans.add(TextSpan(text: text.substring(start, idx)));
       }
-      spans.add(TextSpan(
-        text: text.substring(idx, idx + query.length),
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.orange.shade800,
-          backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+      spans.add(
+        TextSpan(
+          text: text.substring(idx, idx + query.length),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.orange.shade800,
+            backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+          ),
         ),
-      ));
+      );
       start = idx + query.length;
       idx = lower.indexOf(qLower, start);
     }
@@ -186,8 +191,7 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
       if (!_dbService.isCodeAvailable(_selectedCode)) {
         if (mounted && runId == _searchRunId) {
           setState(() {
-            _error =
-                'เฉพาะฉบับหลวง (Thai Royal) เท่านั้นที่พร้อมใช้งานออฟไลน์';
+            _error = 'เฉพาะฉบับหลวง (Thai Royal) เท่านั้นที่พร้อมใช้งานออฟไลน์';
             _isLoading = false;
             _isSearching = false;
           });
@@ -210,8 +214,7 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
 
         setState(() {
           _allResults = items;
-          _displayCount =
-              items.length > _pageSize ? _pageSize : items.length;
+          _displayCount = items.length > _pageSize ? _pageSize : items.length;
           _displayedResults = items.length > _displayCount
               ? items.sublist(0, _displayCount)
               : items;
@@ -251,12 +254,6 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
-          if (_query.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.home_outlined, color: Colors.white),
-              tooltip: 'Categories',
-              onPressed: _clearSearch,
-            ),
           Consumer<ThemeProvider>(
             builder: (context, themeProvider, child) {
               return IconButton(
@@ -293,10 +290,20 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
             children: [
               Expanded(
                 flex: 2,
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (_) {},
-                  onSubmitted: (_) => _search(),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (_) => true,
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (val) {
+                      _debounceTimer?.cancel();
+                      _debounceTimer = Timer(
+                        const Duration(milliseconds: 500),
+                        () {
+                          if (_searchController.text.trim().isNotEmpty) _search();
+                        },
+                      );
+                    },
+                    onSubmitted: (_) => _search(),
                   style: TextStyle(
                     color: isDark ? Colors.grey[100] : Colors.grey[900],
                   ),
@@ -312,36 +319,41 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
                             icon: Icon(
-                              Icons.send,
-                              color: isDark
-                                  ? Colors.brown[200]
-                                  : Colors.brown,
+                              Icons.clear,
+                              color: isDark ? Colors.brown[200] : Colors.brown,
                             ),
-                            onPressed: _search,
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _allResults = [];
+                                _displayedResults = [];
+                                _displayCount = 0;
+                                _query = '';
+                                _error = null;
+                              });
+                            },
                           )
                         : null,
                     filled: true,
-                    fillColor:
-                        isDark ? Colors.grey[700] : Colors.brown.shade50,
+                    fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide.none,
                     ),
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 0),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+            ),
+            const SizedBox(width: 8),
               Expanded(
                 flex: 1,
                 child: DropdownButtonFormField<String>(
-                  value: _selectedCode,
+                  initialValue: _selectedCode,
                   isExpanded: true,
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor:
-                        isDark ? Colors.grey[700] : Colors.brown.shade50,
+                    fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide.none,
@@ -408,13 +420,18 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
           child: Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (val) {
-                    _debounceTimer?.cancel();
-                    _debounceTimer = Timer(const Duration(milliseconds: 500), () => _search());
-                  },
-                  onSubmitted: (_) => _search(),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (_) => true,
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (val) {
+                      _debounceTimer?.cancel();
+                      _debounceTimer = Timer(
+                        const Duration(milliseconds: 500),
+                        () => _search(),
+                      );
+                    },
+                    onSubmitted: (_) => _search(),
                   style: TextStyle(
                     color: isDark ? Colors.grey[100] : Colors.grey[900],
                   ),
@@ -430,39 +447,35 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
                             icon: Icon(
-                              Icons.send,
-                              color: isDark
-                                  ? Colors.brown[200]
-                                  : Colors.brown,
+                              Icons.clear,
+                              color: isDark ? Colors.brown[200] : Colors.brown,
                             ),
-                            onPressed: _search,
+                            onPressed: _clearSearch,
                           )
                         : null,
                     filled: true,
-                    fillColor:
-                        isDark ? Colors.grey[700] : Colors.brown.shade50,
+                    fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide.none,
                     ),
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 0),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   ),
                 ),
+                ),
               ),
-              const SizedBox(width: 8),
               SizedBox(
+                width: 48,
                 height: 48,
-                child: ElevatedButton(
-                  onPressed: _clearSearch,
-                  style: ElevatedButton.styleFrom(
+                child: IconButton(
+                  icon: const Icon(Icons.home, color: Colors.white),
+                  style: IconButton.styleFrom(
                     backgroundColor: Colors.brown,
-                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('Browse'),
+                  onPressed: _clearSearch,
                 ),
               ),
             ],
@@ -474,18 +487,15 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
             child: Text(_error!, style: TextStyle(color: Colors.red)),
           ),
         if (_isSearching)
-          const Expanded(
-            child: Center(child: CircularProgressIndicator()),
-          )
+          const Expanded(child: Center(child: CircularProgressIndicator()))
         else if (_displayedResults.isEmpty && !_isSearching)
-          const Expanded(
-            child: Center(child: Text('No results found')),
-          )
+          const Expanded(child: Center(child: Text('No results found')))
         else
           Expanded(
             child: ListView.separated(
               controller: _scrollController,
-              itemCount: _displayedResults.length +
+              itemCount:
+                  _displayedResults.length +
                   (_displayCount < _allResults.length ? 1 : 0),
               separatorBuilder: (context, index) => Divider(height: 1),
               itemBuilder: (context, index) {
@@ -514,27 +524,26 @@ class _EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
                       letterSpacing: 0.5,
                     ),
                   ),
-                  subtitle:
-                      item.excerpt.isNotEmpty
-                          ? RichText(
-                              text: TextSpan(
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: isDark
-                                      ? Colors.grey[300]
-                                      : Colors.grey[700],
-                                ),
-                                children: _highlightText(
-                                  item.excerpt.length > 100
-                                      ? '${item.excerpt.substring(0, 100)}...'
-                                      : item.excerpt,
-                                  _query,
-                                ),
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            )
-                          : null,
+                  subtitle: item.excerpt.isNotEmpty
+                      ? RichText(
+                          text: TextSpan(
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isDark
+                                  ? Colors.grey[300]
+                                  : Colors.grey[700],
+                            ),
+                            children: _highlightText(
+                              item.excerpt.length > 100
+                                  ? '${item.excerpt.substring(0, 100)}...'
+                                  : item.excerpt,
+                              _query,
+                            ),
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : null,
                   trailing: Icon(Icons.chevron_right, color: Colors.brown),
                   onTap: () {
                     final resultIndex = _allResults.indexOf(item);
@@ -594,11 +603,7 @@ class _CategoryCard extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                category.icon,
-                size: 36,
-                color: Colors.brown,
-              ),
+              Icon(category.icon, size: 36, color: Colors.brown),
               const SizedBox(height: 8),
               Text(
                 category.label,

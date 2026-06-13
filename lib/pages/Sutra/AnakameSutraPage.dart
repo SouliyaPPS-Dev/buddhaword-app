@@ -223,10 +223,12 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: TextField(
-            controller: _searchController,
-            onChanged: _onSearch,
-            style: TextStyle(color: isDark ? Colors.grey[100] : Colors.grey[900]),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (_) => true,
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onSearch,
+              style: TextStyle(color: isDark ? Colors.grey[100] : Colors.grey[900]),
             decoration: InputDecoration(
               hintText: 'Search...',
               hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
@@ -248,6 +250,7 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
               ),
               contentPadding: const EdgeInsets.symmetric(vertical: 0),
             ),
+          ),
           ),
         ),
         if (_filteredItems.isEmpty)

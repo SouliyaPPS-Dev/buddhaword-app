@@ -19,7 +19,7 @@ import 'pages/Sutra/ContactInfoPage.dart';
 import 'pages/Sutra/DetailPage.dart';
 import 'pages/Sutra/AnakameSutraPage.dart';
 import 'pages/Sutra/UttayarndhamPage.dart';
-import 'pages/Sutra/EtipitakaPage.dart';
+import 'pages/Sutra/etipitaka_page.dart';
 import 'pages/Sutra/FavoritePage.dart';
 import 'pages/Sutra/RandomImagePage.dart';
 import 'pages/Video/VideoPage.dart';

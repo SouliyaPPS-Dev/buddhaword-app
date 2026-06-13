@@ -31,16 +31,13 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
   List<UttayarndhamItem> _filteredItems = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
-  bool _isSearching = false;
   bool _hasMore = true;
   String? _error;
   int _currentPage = 0;
-  int _searchRunId = 0;
 
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
-  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -53,7 +50,6 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
   void dispose() {
     _scrollController.dispose();
     _searchController.dispose();
-    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -126,59 +122,17 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
   }
 
   void _onSearch(String query) {
-    _searchDebounce?.cancel();
     setState(() {
       _searchQuery = query;
       if (query.isEmpty) {
         _filteredItems = List.from(_allItems);
-        _isSearching = false;
       } else {
+        final lower = query.toLowerCase();
         _filteredItems = _allItems
-            .where(
-              (item) => item.title.toLowerCase().contains(query.toLowerCase()),
-            )
+            .where((item) => item.title.toLowerCase().contains(lower))
             .toList();
-        if (_hasMore) {
-          _isSearching = true;
-          _searchDebounce = Timer(const Duration(milliseconds: 500), () {
-            _searchAllPages(query);
-          });
-        }
       }
     });
-  }
-
-  Future<void> _searchAllPages(String query) async {
-    final runId = ++_searchRunId;
-    final lowerQuery = query.toLowerCase();
-
-    for (int page = _currentPage + 1; page <= 100 && _hasMore; page++) {
-      if (runId != _searchRunId || _searchQuery.isEmpty) break;
-      try {
-        final url = '$_baseUrl/dhamma-sharing?page=$page';
-        final response = await http.get(Uri.parse(url));
-        if (response.statusCode != 200) break;
-        final items = _parseListing(response.body);
-        if (items.length < _pageSize) _hasMore = false;
-        if (runId != _searchRunId || _searchQuery.isEmpty) break;
-        if (mounted) {
-          setState(() {
-            _allItems.addAll(items);
-            final matches = items
-                .where((item) =>
-                    item.title.toLowerCase().contains(lowerQuery))
-                .toList();
-            _filteredItems.addAll(matches);
-            _currentPage = page;
-          });
-        }
-      } catch (_) {
-        break;
-      }
-    }
-    if (mounted && runId == _searchRunId) {
-      setState(() => _isSearching = false);
-    }
   }
 
   List<TextSpan> _highlightText(String text, String query) {
@@ -212,13 +166,15 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
   List<UttayarndhamItem> _parseListing(String html) {
     final results = <UttayarndhamItem>[];
     final itemRegex = RegExp(
-      r'<h4><a\s+href="\s+(/[^"]+)"[^>]*>([^<]+)</a></h4>',
+      r'<h4><a\s+href="\s+(/[^"]+)"[^>]*>\s*([^<]+?)\s*</a></h4>',
       dotAll: true,
     );
     for (final m in itemRegex.allMatches(html)) {
       final href = m.group(1)!.trim();
       final title = m.group(2)!.trim();
-      results.add(UttayarndhamItem(title: title, url: href));
+      if (title.isNotEmpty) {
+        results.add(UttayarndhamItem(title: title, url: href));
+      }
     }
     return results;
   }
@@ -286,10 +242,12 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: TextField(
-            controller: _searchController,
-            onChanged: _onSearch,
-            style: TextStyle(color: isDark ? Colors.grey[100] : Colors.grey[900]),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (_) => true,
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onSearch,
+              style: TextStyle(color: isDark ? Colors.grey[100] : Colors.grey[900]),
             decoration: InputDecoration(
               hintText: 'Search...',
               hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
@@ -312,34 +270,15 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
               contentPadding: const EdgeInsets.symmetric(vertical: 0),
             ),
           ),
+          ),
         ),
-        if (_filteredItems.isEmpty && !_isLoadingMore && !_isSearching)
+        if (_filteredItems.isEmpty && !_isLoadingMore)
           Expanded(child: Center(child: Text('No items found')))
-        else if (_filteredItems.isEmpty && _isSearching)
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.brown,
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  Text('Searching...'),
-                ],
-              ),
-            ),
-          )
         else
           Expanded(
             child: ListView.separated(
               controller: _scrollController,
-              itemCount: _filteredItems.length + (_isLoadingMore || _isSearching ? 1 : 0),
+              itemCount: _filteredItems.length + (_isLoadingMore ? 1 : 0),
               separatorBuilder: (context, index) => Divider(height: 1),
               itemBuilder: (context, index) {
                 if (index == _filteredItems.length) {
