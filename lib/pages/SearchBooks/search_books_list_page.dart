@@ -512,30 +512,42 @@ class _SearchBooksListPageState extends State<SearchBooksListPage> {
                         child: Stack(
                           children: [
                             Positioned.fill(
-                              child: CachedNetworkImage(
-                                imageUrl: book.coverFullUrl,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.brown.shade700,
-                                  child: const Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: Colors.brown.shade700,
-                                  child: Center(
-                                    child: Text(
-                                      book.title.isNotEmpty
-                                          ? book.title[0].toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 32,
-                                        fontWeight: FontWeight.bold,
+                              child: Builder(
+                                builder: (context) {
+                                  final fallback = Container(
+                                    color: Colors.brown.shade700,
+                                    child: Center(
+                                      child: Text(
+                                        book.title.isNotEmpty
+                                            ? book.title[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ),
+                                  );
+                                  if (book.coverUrl.startsWith('assets/')) {
+                                    return Image.asset(
+                                      book.coverUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) => fallback,
+                                    );
+                                  }
+                                  return CachedNetworkImage(
+                                    imageUrl: book.coverFullUrl,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => Container(
+                                      color: Colors.brown.shade700,
+                                      child: const Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    ),
+                                    errorWidget: (context, url, error) => fallback,
+                                  );
+                                },
                               ),
                             ),
                           ],

@@ -39,7 +39,8 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
       if (uri.startsWith('/book')) return 3;
       if (uri.startsWith('/video')) return 5;
       if (uri == '/calendar' || uri.startsWith('/calendar/view')) return 6;
-      if (uri == '/search' || uri == '/etipitaka') return 7;
+      if (uri == '/etipitaka') return 7;
+      if (uri == '/search') return 12;
       if (uri == '/thaisutra') return 8;
       if (uri == '/uttayarndham') return 9;
       if (uri == '/contact') return 14;
@@ -685,6 +686,16 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
           ),
           title: 'ຄົ້ນຫາປຶ້ມ',
           onTap: () => _openLinkSearchBooks(),
+        ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 12,
+          leading: const Icon(
+            Icons.explore_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
+          title: 'ຄົ້ນຫາທັງໝົດ',
+          onTap: () => {context.push('/search')},
         ),
         const SizedBox(height: 8),
         _menuTile(

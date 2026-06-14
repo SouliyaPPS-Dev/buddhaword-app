@@ -44,9 +44,11 @@ class BookSummary {
     'coverUrl': coverUrl,
   };
 
-  String get coverFullUrl => coverUrl.startsWith('http')
-      ? coverUrl
-      : '$_baseUrl$coverUrl';
+  String get coverFullUrl {
+    if (coverUrl.startsWith('http')) return coverUrl;
+    if (coverUrl.startsWith('assets/')) return coverUrl;
+    return '$_baseUrl$coverUrl';
+  }
 }
 
 class PageContent {
@@ -191,6 +193,15 @@ class SearchBooksProvider with ChangeNotifier {
   List<BookSummary> get books => _books;
   bool get isLoading => _isLoading;
   String? get error => _error;
+
+  Future<String> _getBookTitle(String slug) async {
+    final match = _books.where((b) => b.slug == slug);
+    if (match.isNotEmpty) return match.first.title;
+    final manifestBooks = await _loadManifestBooks();
+    final m = manifestBooks.where((b) => b.slug == slug);
+    if (m.isNotEmpty) return m.first.title;
+    return slug;
+  }
 
   Future<List<BookSummary>> _loadManifestBooks() async {
     try {
@@ -356,9 +367,10 @@ class SearchBooksProvider with ChangeNotifier {
       if (pageEntry.isEmpty) return null;
 
       final totalPages = pages.length;
+      final title = await _getBookTitle(slug);
       return PageNavResult(
         bookSlug: slug,
-        bookTitle: slug,
+        bookTitle: title,
         totalPages: totalPages,
         page: PageContent(
           number: pageNum,
