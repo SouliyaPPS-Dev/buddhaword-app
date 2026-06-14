@@ -33,6 +33,49 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
 
   List<List<dynamic>> _data = [];
 
+  int _getSelectedIndex() {
+    try {
+      final uri = GoRouterState.of(context).uri.toString();
+      if (uri == '/' || uri.startsWith('/sutra')) return 0;
+      if (uri == '/search-books') return 1;
+      if (uri == '/favorites') return 2;
+      if (uri.startsWith('/book')) return 3;
+      if (uri.startsWith('/video')) return 5;
+      if (uri == '/calendar' || uri.startsWith('/calendar/view')) return 6;
+      if (uri == '/search' || uri == '/etipitaka') return 7;
+      if (uri == '/thaisutra') return 8;
+      if (uri == '/uttayarndham') return 9;
+      if (uri == '/contact') return 14;
+    } catch (_) {}
+    return -1;
+  }
+
+  Widget _menuTile({
+    required int index,
+    required Widget leading,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    final sel = _getSelectedIndex();
+    final isSelected = index == sel;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+      leading: leading,
+      selected: isSelected,
+      selectedTileColor: Colors.orange.shade50,
+      selectedColor: Colors.brown.shade800,
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+
   // Menu
   final String urlWebapp = "https://dhama-sutra.netlify.app";
   final String urlBooks =
@@ -97,10 +140,7 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
   }
 
   void _openLinkSearchBooks() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SearchBooksListPage()),
-    );
+    context.push('/search-books');
   }
 
   void _openLinkEnglish() async {
@@ -630,131 +670,62 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
     final menuList = Column(
       children: [
         SizedBox(height: 4),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.library_books, color: _checkColor)
-              : Icon(Icons.library_books_outlined, color: _checkColor),
-          title: const Text(
-            'ພຣະສູດ & ສຽງ',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
+        _menuTile(
+          index: 0,
+          leading: Icon(
+            _isChecked ? Icons.library_books : Icons.library_books_outlined,
+            color: _checkColor,
           ),
+          title: 'ພຣະສູດ & ສຽງ',
           onTap: () => {context.push('/')},
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.search, color: _checkColor)
-              : Icon(Icons.search, color: _checkColor),
-          title: const Text(
-            'ຄົ້ນຫາປຶ້ມ',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 1,
+          leading: const Icon(Icons.search, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ຄົ້ນຫາປຶ້ມ',
           onTap: () => _openLinkSearchBooks(),
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.favorite, color: _checkColor)
-              : Icon(Icons.favorite, color: _checkColor),
-          title: const Text(
-            'ພຣະສູດທີຖືກໃຈ',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 2,
+          leading: const Icon(Icons.favorite, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ພຣະສູດທີຖືກໃຈ',
           onTap: () => {context.push('/favorites')},
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.book, color: _checkColor)
-              : Icon(Icons.book_outlined, color: _checkColor),
-          title: const Text(
-            'ປື້ມ & ເເຜນຜັງ',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 3,
+          leading: const Icon(Icons.book_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ປື້ມ & ເເຜນຜັງ',
           onTap: () => _openLinkBooks(),
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.filter_vintage, color: _checkColor)
-              : Icon(Icons.sunny, color: _checkColor),
-          title: const Text(
-            'ພຣະທັມ',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 4,
+          leading: const Icon(Icons.sunny, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ພຣະທັມ',
           onTap: () => _openLinkDhamma(),
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.video_library, color: _checkColor)
-              : Icon(Icons.video_collection_outlined, color: _checkColor),
-          title: const Text(
-            'ວີດີໂອ Video',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 5,
+          leading: const Icon(Icons.video_collection_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ວີດີໂອ Video',
           onTap: () => _openLinkVideo(),
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.calendar_month, color: _checkColor)
-              : Icon(Icons.calendar_month_outlined, color: _checkColor),
-          title: const Text(
-            'ປະຕິທິນທັມ',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 6,
+          leading: const Icon(Icons.calendar_month_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ປະຕິທິນທັມ',
           onTap: () => _openLinkCalendar(),
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.search, color: _checkColor)
-              : Icon(Icons.search_outlined, color: _checkColor),
-          title: const Text(
-            'E-Tipitaka',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 7,
+          leading: const Icon(Icons.search_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'E-Tipitaka',
           onTap: () => {
             Navigator.push(
               context,
@@ -762,20 +733,11 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
             ),
           },
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.menu_book, color: _checkColor)
-              : Icon(Icons.menu_book_outlined, color: _checkColor),
-          title: const Text(
-            'Anakame (ภาษาไทย)',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 8,
+          leading: const Icon(Icons.menu_book_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'Anakame (ภาษาไทย)',
           onTap: () => {
             Navigator.push(
               context,
@@ -783,20 +745,11 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
             ),
           },
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.library_books, color: _checkColor)
-              : Icon(Icons.library_books_outlined, color: _checkColor),
-          title: const Text(
-            'Uttayarndham (ธรรมะ)',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 9,
+          leading: const Icon(Icons.library_books_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'Uttayarndham (ธรรมะ)',
           onTap: () => {
             Navigator.push(
               context,
@@ -804,100 +757,46 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
             ),
           },
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.language, color: _checkColor)
-              : Icon(Icons.language_outlined, color: _checkColor),
-          title: const Text(
-            'Buddhaword English',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 10,
+          leading: const Icon(Icons.language_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'Buddhaword English',
           onTap: () => _openLinkEnglish(),
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.newspaper_outlined, color: _checkColor)
-              : Icon(Icons.newspaper_rounded, color: _checkColor),
-          title: const Text(
-            'ຂ່າວສານ',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 11,
+          leading: const Icon(Icons.newspaper_rounded, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ຂ່າວສານ',
           onTap: () => _openLinkNews(),
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.message, color: _checkColor)
-              : Icon(Icons.message_outlined, color: _checkColor),
-          title: const Text(
-            'ສົນທະນາ',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 12,
+          leading: const Icon(Icons.message_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ສົນທະນາ',
           onTap: () => _openLinkChat(),
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.chat_bubble_rounded, color: _checkColor)
-              : Icon(Icons.chat_bubble_rounded, color: _checkColor),
-          title: const Text(
-            'ກຸ່ມສົນທະນາທັມ',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 13,
+          leading: const Icon(Icons.chat_bubble_rounded, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ກຸ່ມສົນທະນາທັມ',
           onTap: () => _openLinkGroupChat(),
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.contact_page_outlined, color: _checkColor)
-              : Icon(Icons.contact_page_outlined, color: _checkColor),
-          title: const Text(
-            'ຂໍ້ມູນຕິດຕໍ່',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 14,
+          leading: const Icon(Icons.contact_page_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ຂໍ້ມູນຕິດຕໍ່',
           onTap: () => {context.push('/contact')},
         ),
-        SizedBox(height: 8),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: _isChecked
-              ? Icon(Icons.refresh_outlined, color: _checkColor)
-              : Icon(Icons.update_outlined, color: _checkColor),
-          title: const Text(
-            'ອັບເດດຂໍ້ມູນໃໝ່',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
+        const SizedBox(height: 8),
+        _menuTile(
+          index: 15,
+          leading: const Icon(Icons.update_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          title: 'ອັບເດດຂໍ້ມູນໃໝ່',
           onTap: _handleTap,
         ),
         SizedBox(height: 8),

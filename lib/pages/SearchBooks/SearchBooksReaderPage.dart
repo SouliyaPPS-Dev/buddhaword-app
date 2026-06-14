@@ -13,6 +13,52 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../providers/search_books_provider.dart';
 
+class _SearchHighlightController extends TextEditingController {
+  final String query;
+  final bool isDark;
+
+  _SearchHighlightController({
+    required String text,
+    required this.query,
+    required this.isDark,
+  }) : super(text: text);
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    if (query.isEmpty) {
+      return TextSpan(text: text, style: style);
+    }
+    final escaped = RegExp.escape(query);
+    final regex = RegExp('($escaped)', caseSensitive: false);
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      spans.add(TextSpan(
+        text: text.substring(match.start, match.end),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: isDark ? Colors.yellowAccent : Colors.brown.shade900,
+          backgroundColor: isDark
+              ? Colors.yellow.withValues(alpha: 0.3)
+              : const Color(0xFFFFD700),
+        ),
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+    return TextSpan(style: style, children: spans);
+  }
+}
+
 enum _AudioMode { none, tts }
 
 enum BookTheme { light, sepia, dark }
@@ -72,6 +118,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     _pageController = PageController(initialPage: startIndex);
     _loadPage(_currentPage);
     _loadTheme();
+    _loadFontSize();
   }
 
   Future<void> _loadTheme() async {
@@ -83,6 +130,19 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   Future<void> _saveTheme(BookTheme theme) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('reader_theme', theme.index);
+  }
+
+  Future<void> _loadFontSize() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getDouble('fontSize');
+    if (saved != null && mounted) {
+      setState(() => _fontSize = saved);
+    }
+  }
+
+  Future<void> _saveFontSize(double size) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('fontSize', size);
   }
 
   void _cycleTheme() {
@@ -341,12 +401,15 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                   : null,
               iconSize: 32,
             ),
-            Text(
-              '$_currentPage / $_totalPages',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+            GestureDetector(
+              onTap: _showPageJumpDialog,
+              child: Text(
+                '$_currentPage / $_totalPages',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
             IconButton(
@@ -389,29 +452,32 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
             ),
             const SizedBox(width: 8),
             if (_totalPages > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<int>(
-                    value: _currentPage.clamp(1, _totalPages),
-                    dropdownColor: Colors.brown.shade700,
-                    style: const TextStyle(
-                      color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold,
-                    ),
-                    items: List.generate(
-                      _totalPages > 1000 ? 1000 : _totalPages,
-                      (i) => DropdownMenuItem(
-                        value: i + 1,
-                        child: Text('${i + 1}'),
+              GestureDetector(
+                onTap: _showPageJumpDialog,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$_currentPage',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    onChanged: (v) {
-                      if (v != null) _goToPage(v);
-                    },
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.arrow_drop_down,
+                        size: 16,
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -434,14 +500,22 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     }
 
     if (query == null || query.isEmpty) {
-      return SelectableText(
-        text,
+      return TextField(
+        controller: TextEditingController(text: text),
+        readOnly: true,
+        showCursor: true,
         style: TextStyle(
           fontSize: _fontSize,
           height: 1.6,
           fontFamily: 'NotoSerifLao',
           color: _textColor,
         ),
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        maxLines: null,
       );
     }
 
@@ -546,43 +620,26 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   }
 
   Widget _buildHighlightedText(String text, String query) {
-    final escaped = RegExp.escape(query);
-    final regex = RegExp('($escaped)', caseSensitive: false);
-    final spans = <TextSpan>[];
-    int lastEnd = 0;
-
-    for (final match in regex.allMatches(text)) {
-      if (match.start > lastEnd) {
-        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
-      }
-      spans.add(TextSpan(
-        text: text.substring(match.start, match.end),
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: _bookTheme == BookTheme.dark
-              ? Colors.yellowAccent
-              : Colors.brown.shade900,
-          backgroundColor: _bookTheme == BookTheme.dark
-              ? Colors.yellow.withValues(alpha: 0.3)
-              : const Color(0xFFFFD700),
-        ),
-      ));
-      lastEnd = match.end;
-    }
-    if (lastEnd < text.length) {
-      spans.add(TextSpan(text: text.substring(lastEnd)));
-    }
-
-    return SelectableText.rich(
-      TextSpan(
-        style: TextStyle(
-          fontSize: _fontSize,
-          height: 1.6,
-          fontFamily: 'NotoSerifLao',
-          color: _textColor,
-        ),
-        children: spans,
+    return TextField(
+      controller: _SearchHighlightController(
+        text: text,
+        query: query,
+        isDark: _bookTheme == BookTheme.dark,
       ),
+      readOnly: true,
+      showCursor: true,
+      style: TextStyle(
+        fontSize: _fontSize,
+        height: 1.6,
+        fontFamily: 'NotoSerifLao',
+        color: _textColor,
+      ),
+      decoration: const InputDecoration(
+        border: InputBorder.none,
+        isDense: true,
+        contentPadding: EdgeInsets.zero,
+      ),
+      maxLines: null,
     );
   }
 
@@ -618,6 +675,102 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
           color: _textColor,
         ),
         children: spans,
+      ),
+    );
+  }
+
+  void _showPageJumpDialog() {
+    final controller = TextEditingController(text: '$_currentPage');
+    final cols = MediaQuery.of(context).size.width > 600 ? 10 : 7;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ໄປທີ່ໜ້າ'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      keyboardType: TextInputType.number,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: '1 – $_totalPages',
+                        prefixIcon: const Icon(Icons.edit),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () {
+                      final v = int.tryParse(controller.text);
+                      if (v != null && v >= 1 && v <= _totalPages) {
+                        Navigator.pop(ctx);
+                        _goToPage(v);
+                      }
+                    },
+                    child: const Text('ໄປ'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 300,
+                child: GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: cols,
+                    mainAxisSpacing: 4,
+                    crossAxisSpacing: 4,
+                    childAspectRatio: 1.5,
+                  ),
+                  itemCount: _totalPages,
+                  itemBuilder: (_, i) {
+                    final p = i + 1;
+                    final isCurrent = p == _currentPage;
+                    return Material(
+                      color: isCurrent
+                          ? Colors.orange.shade100
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(4),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _goToPage(p);
+                        },
+                        child: Center(
+                          child: Text(
+                            '$p',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isCurrent
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isCurrent
+                                  ? Colors.brown.shade800
+                                  : Colors.brown.shade600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('ຍົກເລີກ'),
+          ),
+        ],
       ),
     );
   }
@@ -946,11 +1099,13 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   }
 
   void _increaseFontSize() {
-    setState(() => _fontSize = (_fontSize + 2).clamp(12.0, 36.0));
+    setState(() => _fontSize += 2.0);
+    _saveFontSize(_fontSize);
   }
 
   void _decreaseFontSize() {
-    setState(() => _fontSize = (_fontSize - 2).clamp(12.0, 36.0));
+    setState(() => _fontSize = _fontSize > 2.0 ? _fontSize - 2.0 : _fontSize);
+    _saveFontSize(_fontSize);
   }
 
   void _showSearchInBookDialog(BuildContext context) {
