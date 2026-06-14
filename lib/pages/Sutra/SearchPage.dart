@@ -23,6 +23,10 @@ import 'UttayarndhamContentPage.dart';
 import 'etipitaka_content_page.dart';
 
 class SearchPage extends StatefulWidget {
+  final String initialSource;
+
+  const SearchPage({super.key, this.initialSource = 'all'});
+
   @override
   _SearchPageState createState() => _SearchPageState();
 }
@@ -36,14 +40,25 @@ class _SearchPageState extends State<SearchPage> {
   String _searchTerm = '';
   String _selectedCategory = '';
 
-  String _selectedSource = 'all';
+  late String _selectedSource;
   List<Map<String, dynamic>> _externalResults = [];
   bool _isSearching = false;
   Timer? _debounceTimer;
   String _etipitakaCode = 'thai';
   final List<String> _etipitakaCodes = [
-    'thai', 'pali', 'english', 'burma', 'myan', 'sri', 'siam',
-    'chinese', 'tibetan', 'korean', 'vietnamese', 'japanese', 'roman'
+    'thai',
+    'pali',
+    'english',
+    'burma',
+    'myan',
+    'sri',
+    'siam',
+    'chinese',
+    'tibetan',
+    'korean',
+    'vietnamese',
+    'japanese',
+    'roman',
   ];
 
   List<String> _favorites = [];
@@ -75,6 +90,7 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void initState() {
     super.initState();
+    _selectedSource = widget.initialSource;
     fetchData(_searchTerm);
     _loadFavorites();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -252,7 +268,9 @@ class _SearchPageState extends State<SearchPage> {
 
   int _findNextValidAudioIndex(int currentIndex) {
     for (int i = currentIndex + 1; i < _filteredData.length; i++) {
-      final audio = _filteredData[i].length > 5 ? _filteredData[i][5].toString() : '';
+      final audio = _filteredData[i].length > 5
+          ? _filteredData[i][5].toString()
+          : '';
       if (audio.isNotEmpty && audio != '/') {
         return i;
       }
@@ -262,7 +280,9 @@ class _SearchPageState extends State<SearchPage> {
 
   int _findPreviousValidAudioIndex(int currentIndex) {
     for (int i = currentIndex - 1; i >= 0; i--) {
-      final audio = _filteredData[i].length > 5 ? _filteredData[i][5].toString() : '';
+      final audio = _filteredData[i].length > 5
+          ? _filteredData[i][5].toString()
+          : '';
       if (audio.isNotEmpty && audio != '/') {
         return i;
       }
@@ -351,6 +371,10 @@ class _SearchPageState extends State<SearchPage> {
       updateData(searchTerm, selectedCategory);
     }
     if (_selectedSource != 'main') {
+      if (_externalResults.isNotEmpty) {
+        setState(() => _externalResults = []);
+      }
+      setState(() => _isSearching = true);
       _debounceTimer = Timer(const Duration(milliseconds: 400), () {
         _searchExternalSources(searchTerm);
       });
@@ -384,7 +408,6 @@ class _SearchPageState extends State<SearchPage> {
       setState(() => _externalResults = []);
       return;
     }
-    setState(() => _isSearching = true);
 
     final List<Map<String, dynamic>> results = [];
 
@@ -393,16 +416,20 @@ class _SearchPageState extends State<SearchPage> {
         final db = EtipitakaDatabaseService();
         final dbResults = await db.search(_etipitakaCode, query);
         for (final r in dbResults) {
+          final desc = r.content.replaceAll(RegExp(r'\s+'), ' ').trim();
+          final firstLine = desc.length > 120
+              ? '${desc.substring(0, 120)}...'
+              : desc;
           results.add({
             'source': 'etipitaka',
             'sourceLabel': 'E-Tipitaka',
-            'title': 'Volume ${r.volume} Page ${r.page}',
-            'subtitle': r.items.length > 80 ? '${r.items.substring(0, 80)}...' : r.items,
+            'title': 'เล่มที่ ${r.volume} · หน้า ${r.page}',
+            'subtitle': firstLine,
             'payload': {
               'code': _etipitakaCode,
               'volume': r.volume,
               'page': r.page,
-              'title': 'Volume ${r.volume} Page ${r.page}',
+              'title': 'E-Tipitaka',
             },
           });
         }
@@ -413,23 +440,48 @@ class _SearchPageState extends State<SearchPage> {
 
     if (_selectedSource == 'anakame' || _selectedSource == 'all') {
       try {
-        const listingUrl = 'http://anakame.com/page/1_Sutas/main/1_Sutta_number.htm';
-        final response = await http.get(Uri.parse(listingUrl));
-        if (response.statusCode == 200) {
-          final decoded = utf8.decode(response.bodyBytes);
+        const listingUrl =
+            'http://anakame.com/page/1_Sutas/main/1_Sutta_number.htm';
+        final listingResponse = await http.get(
+          Uri.parse(listingUrl),
+          headers: {'User-Agent': 'Mozilla/5.0'},
+        );
+        if (listingResponse.statusCode == 200) {
+          final decoded = utf8.decode(listingResponse.bodyBytes);
           final items = _parseAnakameListing(decoded);
           final q = query.toLowerCase();
+          int contentFetches = 0;
           for (final item in items) {
             if (item['title'].toString().toLowerCase().contains(q)) {
+              String snippet = item['number'];
+              if (contentFetches < 5) {
+                try {
+                  final contentUrl = item['url'].toString().startsWith('http')
+                      ? item['url'].toString()
+                      : Uri.parse(listingUrl).resolve(item['url']).toString();
+                  final contentRes = await http.get(
+                    Uri.parse(contentUrl),
+                    headers: {'User-Agent': 'Mozilla/5.0'},
+                  );
+                  if (contentRes.statusCode == 200) {
+                    final text = utf8
+                        .decode(contentRes.bodyBytes)
+                        .replaceAll(RegExp(r'<[^>]*>'), ' ')
+                        .replaceAll(RegExp(r'\s+'), ' ')
+                        .trim();
+                    snippet = text.length > 100
+                        ? '${text.substring(0, 100)}...'
+                        : text;
+                  }
+                } catch (_) {}
+                contentFetches++;
+              }
               results.add({
                 'source': 'anakame',
                 'sourceLabel': 'Anakame',
                 'title': item['title'],
-                'subtitle': item['number'],
-                'payload': {
-                  'contentUrl': item['url'],
-                  'title': item['title'],
-                },
+                'subtitle': snippet,
+                'payload': {'contentUrl': item['url'], 'title': 'Anakame'},
               });
             }
           }
@@ -443,7 +495,10 @@ class _SearchPageState extends State<SearchPage> {
       try {
         for (int page = 1; page <= 3; page++) {
           final url = 'https://uttayarndham.org/dhamma-sharing?page=$page';
-          final response = await http.get(Uri.parse(url));
+          final response = await http.get(
+            Uri.parse(url),
+            headers: {'User-Agent': 'Mozilla/5.0'},
+          );
           if (response.statusCode == 200) {
             final items = _parseUttayarndhamListing(response.body);
             final q = query.toLowerCase();
@@ -453,10 +508,9 @@ class _SearchPageState extends State<SearchPage> {
                   'source': 'uttayarndham',
                   'sourceLabel': 'Uttayarndham',
                   'title': item['title'],
-                  'subtitle': 'uttayarndham.org${item['url']}',
                   'payload': {
                     'contentUrl': 'https://uttayarndham.org${item['url']}',
-                    'title': item['title'],
+                    'title': 'Uttayarndham',
                   },
                 });
               }
@@ -478,20 +532,33 @@ class _SearchPageState extends State<SearchPage> {
 
   List<Map<String, dynamic>> _parseAnakameListing(String html) {
     final items = <Map<String, dynamic>>[];
-    final rowRegex = RegExp(r'<tr>(.*?)</tr>', dotAll: true);
-    final rows = rowRegex.allMatches(html);
+    final tdRegex = RegExp(r'<td[^>]*>(.*?)</td>', dotAll: true);
+    final linkRegex = RegExp(
+      r'<a\s+href="([^"]*)"[^>]*>(.*?)</a>',
+      dotAll: true,
+    );
+    final rows = RegExp(r'<tr>(.*?)</tr>', dotAll: true).allMatches(html);
     for (final row in rows) {
-      final cols = row.group(1)!.split('<td>');
-      if (cols.length >= 3) {
-        final number = cols[1].replaceAll(RegExp(r'<[^>]*>'), '').trim();
-        final linkMatch = RegExp(r'<a\s+href="([^"]*)"[^>]*>([^<]*)</a>').firstMatch(cols[2]);
-        if (linkMatch != null) {
-          items.add({
-            'number': number,
-            'title': linkMatch.group(2)!.trim(),
-            'url': linkMatch.group(1)!,
-          });
-        }
+      final tds = tdRegex.allMatches(row.group(1)!).toList();
+      if (tds.length < 2) continue;
+      final number = tds[0].group(1)!.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+      if (number.isEmpty ||
+          int.tryParse(number.replaceAll(RegExp(r'[^0-9]'), '')) == null &&
+              !number.startsWith(RegExp(r'[BS]'))) {
+        continue;
+      }
+      final linkMatch = linkRegex.firstMatch(tds[1].group(1)!);
+      if (linkMatch != null) {
+        final href = linkMatch.group(1)!;
+        if (!href.contains('.htm')) continue;
+        items.add({
+          'number': number,
+          'title': linkMatch
+              .group(2)!
+              .replaceAll(RegExp(r'<[^>]*>'), '')
+              .trim(),
+          'url': href,
+        });
       }
     }
     return items;
@@ -499,13 +566,25 @@ class _SearchPageState extends State<SearchPage> {
 
   List<Map<String, dynamic>> _parseUttayarndhamListing(String html) {
     final items = <Map<String, dynamic>>[];
-    final entryRegex = RegExp(r'<h4><a href="\s+(/[^"]+)"[^>]*>\s*([^<]+?)\s*</a></h4>');
+    final entryRegex = RegExp(
+      r'<h4><a href="([^"]+)"[^>]*>\s*([^<]+?)\s*</a></h4>',
+    );
     final matches = entryRegex.allMatches(html);
     for (final m in matches) {
-      items.add({
-        'url': m.group(1)!.trim(),
-        'title': m.group(2)!.trim(),
-      });
+      items.add({'url': m.group(1)!.trim(), 'title': m.group(2)!.trim()});
+    }
+    if (items.isEmpty) {
+      final fallbackRegex = RegExp(
+        r'<a href="(/[^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
+      );
+      final fallbackMatches = fallbackRegex.allMatches(html);
+      for (final m in fallbackMatches) {
+        final url = m.group(1)!.trim();
+        final title = m.group(2)!.trim();
+        if (url.contains('dhamma-sharing') && title.isNotEmpty) {
+          items.add({'url': url, 'title': title});
+        }
+      }
     }
     return items;
   }
@@ -531,8 +610,7 @@ class _SearchPageState extends State<SearchPage> {
     String searchTerm,
   ) {
     final theme = Theme.of(context);
-    final textColor =
-        theme.textTheme.bodyLarge?.color;
+    final textColor = theme.textTheme.bodyLarge?.color;
 
     if (searchTerm.isEmpty) {
       return TextSpan(
@@ -698,81 +776,85 @@ class _SearchPageState extends State<SearchPage> {
                               },
                             ),
                           ),
-                          if (_selectedSource == 'main' || _selectedSource == 'all')
-                            ...[
-                              const SizedBox(width: 2),
-                              Expanded(
-                                flex: 1,
-                                child: DropdownButtonFormField<String>(
-                                  value: _selectedCategory.isNotEmpty
-                                      ? _selectedCategory
-                                      : null,
-                                  decoration: InputDecoration(
-                                    hintText: 'ໝວດທັມ',
-                                    suffixIcon: _selectedCategory.isNotEmpty
-                                        ? Row(
-                                            mainAxisAlignment: MainAxisAlignment.end,
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  _selectedCategory,
-                                                  textAlign: TextAlign.end,
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    color: Colors.grey[600],
-                                                    letterSpacing: 0.5,
-                                                  ),
+                          if (_selectedSource == 'main' ||
+                              _selectedSource == 'all') ...[
+                            const SizedBox(width: 2),
+                            Expanded(
+                              flex: 1,
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedCategory.isNotEmpty
+                                    ? _selectedCategory
+                                    : null,
+                                decoration: InputDecoration(
+                                  hintText: 'ໝວດທັມ',
+                                  suffixIcon: _selectedCategory.isNotEmpty
+                                      ? Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                _selectedCategory,
+                                                textAlign: TextAlign.end,
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.grey[600],
+                                                  letterSpacing: 0.5,
                                                 ),
                                               ),
-                                              IconButton(
-                                                icon: const Icon(Icons.clear),
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _selectedCategory = '';
-                                                    if (_searchTerm.isEmpty) {
-                                                      _runSearch(_searchTerm, '');
-                                                    } else {
-                                                      fetchData(_searchTerm);
-                                                    }
-                                                  });
-                                                },
-                                              ),
-                                            ],
-                                          )
-                                        : null,
-                                  ),
-                                  onChanged: (String? newValue) {
-                                    setState(() {
-                                      _selectedCategory = newValue ?? '';
-                                      if (_searchTerm.isEmpty) {
-                                        _runSearch(_searchTerm, _selectedCategory);
-                                      } else {
-                                        fetchData(_searchTerm);
-                                      }
-                                    });
-                                  },
-                                  items: _data.isEmpty
-                                      ? null
-                                      : _data
-                                            .map(
-                                              (row) => row.length > 4
-                                                  ? row[4].toString()
-                                                  : '',
-                                            )
-                                            .toSet()
-                                            .toList()
-                                            .map<DropdownMenuItem<String>>((
-                                              String value,
-                                            ) {
-                                              return DropdownMenuItem<String>(
-                                                value: value,
-                                                child: Text(value),
-                                              );
-                                            })
-                                            .toList(),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.clear),
+                                              onPressed: () {
+                                                setState(() {
+                                                  _selectedCategory = '';
+                                                  if (_searchTerm.isEmpty) {
+                                                    _runSearch(_searchTerm, '');
+                                                  } else {
+                                                    fetchData(_searchTerm);
+                                                  }
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        )
+                                      : null,
                                 ),
+                                onChanged: (String? newValue) {
+                                  setState(() {
+                                    _selectedCategory = newValue ?? '';
+                                    if (_searchTerm.isEmpty) {
+                                      _runSearch(
+                                        _searchTerm,
+                                        _selectedCategory,
+                                      );
+                                    } else {
+                                      fetchData(_searchTerm);
+                                    }
+                                  });
+                                },
+                                items: _data.isEmpty
+                                    ? null
+                                    : _data
+                                          .map(
+                                            (row) => row.length > 4
+                                                ? row[4].toString()
+                                                : '',
+                                          )
+                                          .toSet()
+                                          .toList()
+                                          .map<DropdownMenuItem<String>>((
+                                            String value,
+                                          ) {
+                                            return DropdownMenuItem<String>(
+                                              value: value,
+                                              child: Text(value),
+                                            );
+                                          })
+                                          .toList(),
                               ),
-                            ],
+                            ),
+                          ],
                         ],
                       );
                     },
@@ -793,7 +875,9 @@ class _SearchPageState extends State<SearchPage> {
                               label,
                               style: TextStyle(
                                 color: isSelected ? Colors.white : Colors.brown,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                             selected: isSelected,
@@ -826,7 +910,10 @@ class _SearchPageState extends State<SearchPage> {
                             items: _etipitakaCodes.map((code) {
                               return DropdownMenuItem(
                                 value: code,
-                                child: Text(code, style: const TextStyle(fontSize: 13)),
+                                child: Text(
+                                  code,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
                               );
                             }).toList(),
                             onChanged: (code) {
@@ -847,13 +934,15 @@ class _SearchPageState extends State<SearchPage> {
               child: _selectedSource == 'main'
                   ? _buildMainResults()
                   : _selectedSource == 'all'
-                      ? _buildAllResults()
-                      : _buildExternalResults(),
+                  ? _buildAllResults()
+                  : _buildExternalResults(),
             ),
           ],
         ),
       ),
-      floatingActionButton: (_selectedSource == 'main' || _selectedSource == 'all') && _filteredData.isNotEmpty
+      floatingActionButton:
+          (_selectedSource == 'main' || _selectedSource == 'all') &&
+              _filteredData.isNotEmpty
           ? FloatingActionButton(
               heroTag: null,
               onPressed: () {
@@ -893,14 +982,10 @@ class _SearchPageState extends State<SearchPage> {
     return Card(
       elevation: 8,
       margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15.0),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.0)),
       shadowColor: Color.fromARGB(255, 91, 50, 35).withOpacity(0.9),
       child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15.0),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(15.0)),
         child: ListTile(
           title: Padding(
             padding: const EdgeInsets.only(top: 1.5),
@@ -976,7 +1061,9 @@ class _SearchPageState extends State<SearchPage> {
                               audio.contains('youtu.be'))
                             if (_ytController != null && _isPlaying)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8.0,
+                                ),
                                 child: yt.YoutubePlayer(
                                   controller: _ytController!,
                                   aspectRatio: 16 / 9,
@@ -988,7 +1075,8 @@ class _SearchPageState extends State<SearchPage> {
                             Column(
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     IconButton(
                                       icon: Icon(Icons.skip_previous),
@@ -997,21 +1085,31 @@ class _SearchPageState extends State<SearchPage> {
                                             _findPreviousValidAudioIndex(index);
                                         if (previousIndex != -1) {
                                           final previousAudio =
-                                              _filteredData[previousIndex].length > 5
-                                                  ? _filteredData[previousIndex][5].toString()
-                                                  : '/';
-                                          _playPauseAudio(previousIndex, previousAudio);
+                                              _filteredData[previousIndex]
+                                                      .length >
+                                                  5
+                                              ? _filteredData[previousIndex][5]
+                                                    .toString()
+                                              : '/';
+                                          _playPauseAudio(
+                                            previousIndex,
+                                            previousAudio,
+                                          );
                                         }
                                       },
                                     ),
                                     Expanded(
                                       child: Slider(
                                         min: 0.0,
-                                        max: _duration.inMilliseconds.toDouble(),
-                                        value: _position.inMilliseconds.toDouble().clamp(
-                                          0.0,
-                                          _duration.inMilliseconds.toDouble(),
-                                        ),
+                                        max: _duration.inMilliseconds
+                                            .toDouble(),
+                                        value: _position.inMilliseconds
+                                            .toDouble()
+                                            .clamp(
+                                              0.0,
+                                              _duration.inMilliseconds
+                                                  .toDouble(),
+                                            ),
                                         onChanged: (value) {
                                           _seek(
                                             Duration(
@@ -1031,9 +1129,11 @@ class _SearchPageState extends State<SearchPage> {
                                             _findNextValidAudioIndex(index);
                                         if (nextIndex != -1) {
                                           final nextAudio =
-                                              _filteredData[nextIndex].length > 5
-                                                  ? _filteredData[nextIndex][5].toString()
-                                                  : '/';
+                                              _filteredData[nextIndex].length >
+                                                  5
+                                              ? _filteredData[nextIndex][5]
+                                                    .toString()
+                                              : '/';
                                           _playPauseAudio(nextIndex, nextAudio);
                                         }
                                       },
@@ -1041,7 +1141,9 @@ class _SearchPageState extends State<SearchPage> {
                                     SizedBox(width: 0),
                                     IconButton(
                                       icon: Icon(
-                                        _isRepeating ? Icons.repeat_one : Icons.repeat,
+                                        _isRepeating
+                                            ? Icons.repeat_one
+                                            : Icons.repeat,
                                       ),
                                       color: Colors.brown,
                                       iconSize: 25,
@@ -1049,7 +1151,9 @@ class _SearchPageState extends State<SearchPage> {
                                         setState(() {
                                           _isRepeating = !_isRepeating;
                                           _player.setLoopMode(
-                                            _isRepeating ? LoopMode.one : LoopMode.off,
+                                            _isRepeating
+                                                ? LoopMode.one
+                                                : LoopMode.off,
                                           );
                                         });
                                       },
@@ -1066,17 +1170,22 @@ class _SearchPageState extends State<SearchPage> {
                                   ],
                                 ),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16.0,
+                                  ),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(_formatDuration(_position)),
-                                      Text(_formatDuration(_duration - _position)),
+                                      Text(
+                                        _formatDuration(_duration - _position),
+                                      ),
                                     ],
                                   ),
                                 ),
                               ],
-                          ),
+                            ),
                         ],
                       ),
                   ],
@@ -1147,7 +1256,8 @@ class _SearchPageState extends State<SearchPage> {
 
     return ListView.builder(
       itemCount: _externalResults.length,
-      itemBuilder: (context, index) => _buildExternalResultCard(_externalResults[index]),
+      itemBuilder: (context, index) =>
+          _buildExternalResultCard(_externalResults[index]),
     );
   }
 
@@ -1160,17 +1270,13 @@ class _SearchPageState extends State<SearchPage> {
     return Card(
       elevation: 4,
       margin: EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
       child: ListTile(
         leading: CircleAvatar(
           radius: 18,
           backgroundColor: _sourceColor(source).withOpacity(0.15),
           child: Icon(
-            source == 'etipitaka'
-                ? Icons.menu_book
-                : Icons.language,
+            source == 'etipitaka' ? Icons.menu_book : Icons.language,
             color: _sourceColor(source),
             size: 20,
           ),
@@ -1223,34 +1329,70 @@ class _SearchPageState extends State<SearchPage> {
     final hasExternal = _externalResults.isNotEmpty;
 
     if (!hasMain && !hasExternal) {
-      if (_searchTerm.isNotEmpty) {
-        return Center(
+      if (_searchTerm.isEmpty) {
+        return _buildMainResults();
+      }
+      if (_isSearching) {
+        return const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(
-                'ບໍ່ພົບຜົນການຄົ້ນຫາ',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-              ),
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('ກຳລັງຄົ້ນຫາ...', style: TextStyle(color: Colors.brown)),
             ],
           ),
         );
       }
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'ບໍ່ພົບຜົນການຄົ້ນຫາ',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
     }
 
     final mainCount = hasMain ? _filteredData.length : 0;
     final extCount = hasExternal ? _externalResults.length : 0;
+    final loadingExtra = (hasMain && _isSearching) ? 1 : 0;
 
     return ListView.builder(
-      itemCount: mainCount + extCount,
+      itemCount: mainCount + extCount + loadingExtra,
       itemBuilder: (context, index) {
         if (index < mainCount) {
           return _buildMainResultCard(index);
         }
-        return _buildExternalResultCard(_externalResults[index - mainCount]);
+        final extIndex = index - mainCount;
+        if (extIndex < extCount) {
+          return _buildExternalResultCard(_externalResults[extIndex]);
+        }
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'ກຳລັງຄົ້ນຫາແຫຼ່ງອື່ນ...',
+                  style: TextStyle(color: Colors.brown, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        );
       },
     );
   }
