@@ -481,7 +481,12 @@ class _SearchPageState extends State<SearchPage> {
                 'sourceLabel': 'Anakame',
                 'title': item['title'],
                 'subtitle': snippet,
-                'payload': {'contentUrl': item['url'], 'title': 'Anakame'},
+                'payload': {
+                  'contentUrl': item['url'].toString().startsWith('http')
+                      ? item['url'].toString()
+                      : Uri.parse(listingUrl).resolve(item['url']).toString(),
+                  'title': 'Anakame',
+                },
               });
             }
           }
