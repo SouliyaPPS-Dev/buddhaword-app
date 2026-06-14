@@ -192,6 +192,29 @@ class SearchBooksProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
+  Future<List<BookSummary>> _loadManifestBooks() async {
+    try {
+      final manifestJson = await rootBundle.loadString(
+        'assets/search_books/books.json',
+      );
+      final list = json.decode(manifestJson) as List;
+      return list.map((e) {
+        final slug = e['slug'] as String? ?? '';
+        return BookSummary(
+          slug: slug,
+          title: e['title'] as String? ?? slug,
+          year: 0,
+          totalPages: e['totalPages'] as int? ?? 0,
+          type: e['type'] as String? ?? '',
+          coverUrl: 'assets/search_books/$slug/cover.png',
+        );
+      }).toList();
+    } catch (e) {
+      if (kDebugMode) print('Error loading manifest: $e');
+    }
+    return [];
+  }
+
   Future<bool> _hasInternet() async {
     final results = await Connectivity().checkConnectivity();
     return !results.contains(ConnectivityResult.none);
@@ -207,37 +230,41 @@ class SearchBooksProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final cached = prefs.getString('searchBooks_list');
 
-    if (!await _hasInternet()) {
-      if (cached != null && cached.isNotEmpty) {
-        _books = (json.decode(cached) as List)
-            .map((e) => BookSummary.fromJson(e as Map<String, dynamic>))
-            .toList();
+    if (await _hasInternet()) {
+      try {
+        final response = await http.get(
+          Uri.parse('$_baseUrl/api/search-books/list'),
+        );
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body) as Map<String, dynamic>;
+          _books = (data['books'] as List)
+              .map((e) => BookSummary.fromJson(e as Map<String, dynamic>))
+              .toList();
+          await prefs.setString('searchBooks_list', json.encode(_books.map((e) => e.toJson()).toList()));
+          _isLoading = false;
+          _error = null;
+          notifyListeners();
+          return _books;
+        }
+      } catch (e) {
+        if (kDebugMode) print('Error fetching books: $e');
       }
+    }
+
+    if (cached != null && cached.isNotEmpty) {
+      _books = (json.decode(cached) as List)
+          .map((e) => BookSummary.fromJson(e as Map<String, dynamic>))
+          .toList();
       _isLoading = false;
       notifyListeners();
       return _books;
     }
 
-    try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/api/search-books/list'),
-      );
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        _books = (data['books'] as List)
-            .map((e) => BookSummary.fromJson(e as Map<String, dynamic>))
-            .toList();
-        await prefs.setString('searchBooks_list', json.encode(_books.map((e) => e.toJson()).toList()));
-      } else {
-        _error = 'Failed to load books: ${response.statusCode}';
-      }
-    } catch (e) {
-      _error = 'Error fetching books: $e';
-      if (cached != null && cached.isNotEmpty) {
-        _books = (json.decode(cached) as List)
-            .map((e) => BookSummary.fromJson(e as Map<String, dynamic>))
-            .toList();
-      }
+    final manifestBooks = await _loadManifestBooks();
+    if (manifestBooks.isNotEmpty) {
+      _books = manifestBooks;
+    } else {
+      _error = 'ບໍ່ສາມາດໂຫຼດຂໍ້ມູນໄດ້ (ບໍ່ມີອິນເຕີເນັດ)';
     }
 
     _isLoading = false;
@@ -379,7 +406,16 @@ class SearchBooksProvider with ChangeNotifier {
       }
     }
 
-    final slugs = slugToTitle.keys.toList();
+    List<String> slugs = slugToTitle.keys.toList();
+
+    if (slugs.isEmpty) {
+      final manifestBooks = await _loadManifestBooks();
+      for (final b in manifestBooks) {
+        slugToTitle[b.slug] = b.title;
+      }
+      slugs = slugToTitle.keys.toList();
+    }
+
     if (slugs.isEmpty) return [];
 
     List<GlobalSearchResult> results = [];
