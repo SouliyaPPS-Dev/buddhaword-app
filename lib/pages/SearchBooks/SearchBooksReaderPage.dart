@@ -1,28 +1,36 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart'
     show AudioPlayer, PlayerState, ProcessingState;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../providers/search_books_provider.dart';
 
 enum _AudioMode { none, tts }
 
+enum BookTheme { light, sepia, dark }
+
 class SearchBooksReaderPage extends StatefulWidget {
   final String slug;
   final String title;
   final int totalPages;
+  final String? highlightQuery;
+  final int? initialPage;
 
   const SearchBooksReaderPage({
     super.key,
     required this.slug,
     required this.title,
-    required this.totalPages,
+    this.totalPages = 0,
+    this.highlightQuery,
+    this.initialPage,
   });
 
   @override
@@ -32,7 +40,9 @@ class SearchBooksReaderPage extends StatefulWidget {
 class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   late PageController _pageController;
   int _currentPage = 1;
+  late int _totalPages;
   final Map<int, PageNavResult?> _pageCache = {};
+  final Map<int, bool> _pageErrors = {};
   static const String _ttsBaseUrl = 'https://buddhaword-web.hf.space';
   static const int _ttsMaxChars = 50000;
   static const int _ttsChunkSize = 1200;
@@ -51,22 +61,77 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   final List<Uint8List> _ttsChunkBytes = [];
   int _ttsRunId = 0;
   double _fontSize = 18.0;
+  BookTheme _bookTheme = BookTheme.sepia;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: 0);
-    _loadPage(1);
+    _currentPage = widget.initialPage ?? 1;
+    _totalPages = widget.totalPages;
+    final startIndex = _currentPage - 1;
+    _pageController = PageController(initialPage: startIndex);
+    _loadPage(_currentPage);
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final val = prefs.getInt('reader_theme') ?? 1;
+    if (mounted) setState(() => _bookTheme = BookTheme.values[val.clamp(0, 2)]);
+  }
+
+  Future<void> _saveTheme(BookTheme theme) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('reader_theme', theme.index);
+  }
+
+  void _cycleTheme() {
+    final themes = BookTheme.values;
+    final next = themes[(_bookTheme.index + 1) % themes.length];
+    setState(() => _bookTheme = next);
+    _saveTheme(next);
+  }
+
+  Color get _bgColor {
+    switch (_bookTheme) {
+      case BookTheme.light:
+        return Colors.white;
+      case BookTheme.sepia:
+        return const Color.fromRGBO(246, 238, 217, 1.0);
+      case BookTheme.dark:
+        return const Color(0xFF0D0D0D);
+    }
+  }
+
+  Color get _textColor {
+    switch (_bookTheme) {
+      case BookTheme.light:
+        return const Color.fromRGBO(88, 74, 54, 1.0);
+      case BookTheme.sepia:
+        return const Color.fromRGBO(88, 74, 54, 1.0);
+      case BookTheme.dark:
+        return const Color(0xFFF0F0F0);
+    }
   }
 
   Future<void> _loadPage(int pageNum) async {
     if (_pageCache.containsKey(pageNum)) return;
     final provider = context.read<SearchBooksProvider>();
-    final result = await provider.fetchPage(widget.slug, pageNum);
+    final result = await provider.fetchPage(
+      widget.slug,
+      pageNum,
+      highlight: widget.highlightQuery,
+    );
     if (mounted) {
       setState(() {
         _pageCache[pageNum] = result;
+        if (result == null) {
+          _pageErrors[pageNum] = true;
+        }
         _currentPage = pageNum;
+        if (result != null && _totalPages == 0) {
+          _totalPages = result.totalPages;
+        }
       });
     }
   }
@@ -74,6 +139,13 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   void _onPageChanged(int index) {
     _stopTts();
     final pageNum = index + 1;
+    _currentPage = pageNum;
+    _loadPage(pageNum);
+  }
+
+  void _goToPage(int pageNum) {
+    _stopTts();
+    _pageController.jumpToPage(pageNum - 1);
     _currentPage = pageNum;
     _loadPage(pageNum);
   }
@@ -92,23 +164,19 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromRGBO(246, 238, 217, 1.0),
+      backgroundColor: _bgColor,
       appBar: AppBar(
         backgroundColor: Colors.brown,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          widget.title,
-          style: const TextStyle(fontSize: 16, letterSpacing: 0.5),
-        ),
+        title: _buildTitle(),
         actions: [
           IconButton(
             icon: const Icon(Icons.search, color: Colors.white),
             onPressed: () => _showSearchInBookDialog(context),
           ),
-          const SizedBox(width: 5),
           IconButton(
             icon: const Icon(Icons.text_increase, color: Colors.white),
             onPressed: _increaseFontSize,
@@ -117,7 +185,20 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
             icon: const Icon(Icons.text_decrease, color: Colors.white),
             onPressed: _decreaseFontSize,
           ),
-          const SizedBox(width: 5),
+          IconButton(
+            icon: Icon(
+              _bookTheme == BookTheme.dark
+                  ? Icons.dark_mode
+                  : Icons.light_mode,
+              color: Colors.white,
+            ),
+            onPressed: _cycleTheme,
+          ),
+          IconButton(
+            icon: const Icon(Icons.share, color: Colors.white),
+            onPressed: _sharePage,
+          ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Stack(
@@ -127,11 +208,42 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
-                  itemCount: widget.totalPages,
+                  itemCount: _totalPages > 0 ? _totalPages : 1,
                   onPageChanged: _onPageChanged,
                   itemBuilder: (context, index) {
                     final pageNum = index + 1;
                     final cached = _pageCache[pageNum];
+
+                    if (_pageErrors[pageNum] == true) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.cloud_off, size: 48, color: Colors.grey[400]),
+                              const SizedBox(height: 16),
+                              Text(
+                                'ບໍ່ສາມາດໂຫຼດຂໍ້ມູນໜ້ານີ້ໄດ້',
+                                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _pageErrors.remove(pageNum);
+                                    _pageCache.remove(pageNum);
+                                  });
+                                  _loadPage(pageNum);
+                                },
+                                child: const Text('ລອງໃໝ່'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
 
                     if (cached == null) {
                       return const Center(child: CircularProgressIndicator());
@@ -141,7 +253,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                       onHorizontalDragEnd: (details) {
                         if (details.primaryVelocity == null) return;
                         if (details.primaryVelocity! < -50) {
-                          if (_currentPage < widget.totalPages) {
+                          if (_currentPage < _totalPages) {
                             _pageController.nextPage(
                               duration: const Duration(milliseconds: 300),
                               curve: Curves.easeInOut,
@@ -159,15 +271,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                       child: SingleChildScrollView(
                         physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.all(16.0),
-                        child: SelectableText(
-                          cached.page.text,
-                          style: TextStyle(
-                            fontSize: _fontSize,
-                            height: 1.6,
-                            fontFamily: 'NotoSerifLao',
-                            color: const Color.fromRGBO(88, 74, 54, 1.0),
-                          ),
-                        ),
+                        child: _buildPageText(cached.page.text),
                       ),
                     );
                   },
@@ -194,7 +298,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                 ),
               ),
             ),
-          if (_currentPage < widget.totalPages)
+          if (_currentPage < _totalPages)
             Positioned(
               right: 0,
               top: 0,
@@ -238,7 +342,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
               iconSize: 32,
             ),
             Text(
-              '$_currentPage / ${widget.totalPages}',
+              '$_currentPage / $_totalPages',
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -247,7 +351,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
             ),
             IconButton(
               icon: const Icon(Icons.chevron_right, color: Colors.white),
-              onPressed: _currentPage < widget.totalPages
+              onPressed: _currentPage < _totalPages
                   ? () {
                       _pageController.nextPage(
                         duration: const Duration(milliseconds: 300),
@@ -261,6 +365,271 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildTitle() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 200) {
+          return Text(
+            widget.title,
+            style: const TextStyle(fontSize: 14, letterSpacing: 0.5, color: Colors.white),
+            overflow: TextOverflow.ellipsis,
+          );
+        }
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                widget.title,
+                style: const TextStyle(fontSize: 14, letterSpacing: 0.5, color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (_totalPages > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: _currentPage.clamp(1, _totalPages),
+                    dropdownColor: Colors.brown.shade700,
+                    style: const TextStyle(
+                      color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold,
+                    ),
+                    items: List.generate(
+                      _totalPages > 1000 ? 1000 : _totalPages,
+                      (i) => DropdownMenuItem(
+                        value: i + 1,
+                        child: Text('${i + 1}'),
+                      ),
+                    ),
+                    onChanged: (v) {
+                      if (v != null) _goToPage(v);
+                    },
+                  ),
+                ),
+              ),
+            Text(
+              ' / $_totalPages',
+              style: const TextStyle(fontSize: 13, color: Colors.white70),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPageText(String text) {
+    final query = widget.highlightQuery;
+    final isToc = _isTocPage(text);
+
+    if (isToc) {
+      return _buildTocContent(text, query);
+    }
+
+    if (query == null || query.isEmpty) {
+      return SelectableText(
+        text,
+        style: TextStyle(
+          fontSize: _fontSize,
+          height: 1.6,
+          fontFamily: 'NotoSerifLao',
+          color: _textColor,
+        ),
+      );
+    }
+
+    return _buildHighlightedText(text, query);
+  }
+
+  bool _isTocPage(String text) {
+    if (text.contains('ສາລະບານ') || text.contains('สารບັນ')) return true;
+    final lines = text.split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    if (lines.isEmpty) return false;
+    final tocPattern = RegExp(r'^(.*?)[\s\.…]+(\d+)$');
+    final tocLines = lines.where((l) => tocPattern.hasMatch(l)).length;
+    return lines.isNotEmpty && (tocLines / lines.length) >= 0.5;
+  }
+
+  Widget _buildTocContent(String text, String? query) {
+    final lines = text.split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: lines.map((line) {
+        if (line.startsWith('ສາລະບານ')) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: SelectableText(
+              line,
+              style: TextStyle(
+                fontSize: _fontSize + 4,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'NotoSerifLao',
+                color: _textColor,
+              ),
+            ),
+          );
+        }
+
+        final tocMatch = RegExp(r'^(.*?)[\s\.…]+(\d+)$').firstMatch(line);
+        if (tocMatch != null) {
+          final title = tocMatch.group(1)!;
+          final pageNum = int.parse(tocMatch.group(2)!);
+          final viewerPage = pageNum;
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: InkWell(
+              onTap: () => _goToPage(viewerPage),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: query != null && query.isNotEmpty
+                        ? _buildHighlightedInline(title, query)
+                        : SelectableText(
+                            title,
+                            style: TextStyle(
+                              fontSize: _fontSize,
+                              fontFamily: 'NotoSerifLao',
+                              color: _textColor,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.brown.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '$viewerPage',
+                      style: TextStyle(
+                        fontSize: _fontSize - 2,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.brown,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: SelectableText(
+            line,
+            style: TextStyle(
+              fontSize: _fontSize,
+              fontFamily: 'NotoSerifLao',
+              color: _textColor,
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildHighlightedText(String text, String query) {
+    final escaped = RegExp.escape(query);
+    final regex = RegExp('($escaped)', caseSensitive: false);
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      spans.add(TextSpan(
+        text: text.substring(match.start, match.end),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: _bookTheme == BookTheme.dark
+              ? Colors.yellowAccent
+              : Colors.brown.shade900,
+          backgroundColor: _bookTheme == BookTheme.dark
+              ? Colors.yellow.withValues(alpha: 0.3)
+              : const Color(0xFFFFD700),
+        ),
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    return SelectableText.rich(
+      TextSpan(
+        style: TextStyle(
+          fontSize: _fontSize,
+          height: 1.6,
+          fontFamily: 'NotoSerifLao',
+          color: _textColor,
+        ),
+        children: spans,
+      ),
+    );
+  }
+
+  Widget _buildHighlightedInline(String text, String query) {
+    final escaped = RegExp.escape(query);
+    final regex = RegExp('($escaped)', caseSensitive: false);
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+      }
+      spans.add(TextSpan(
+        text: text.substring(match.start, match.end),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.brown.shade900,
+          backgroundColor: const Color(0xFFFFD700),
+        ),
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    return SelectableText.rich(
+      TextSpan(
+        style: TextStyle(
+          fontSize: _fontSize,
+          fontFamily: 'NotoSerifLao',
+          color: _textColor,
+        ),
+        children: spans,
+      ),
+    );
+  }
+
+  void _sharePage() {
+    final base = 'https://buddhaword-web.hf.space';
+    final queryParam = widget.highlightQuery != null && widget.highlightQuery!.isNotEmpty
+        ? '?q=${Uri.encodeComponent(widget.highlightQuery!)}'
+        : '';
+    final url = '$base/search-books/${widget.slug}/page/$_currentPage$queryParam';
+    final title = '${widget.title} - ໜ້າ $_currentPage';
+    SharePlus.instance.share(ShareParams(text: url, title: title));
   }
 
   Widget _buildVolumeFab() {
@@ -662,7 +1031,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
               child: ListView.separated(
                 controller: scrollController,
                 itemCount: results.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (_, i) {
                   final r = results[i];
                   return ListTile(
@@ -678,8 +1047,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                     ),
                     onTap: () {
                       Navigator.pop(context);
-                      _pageController.jumpToPage(r.page - 1);
-                      _loadPage(r.page);
+                      _goToPage(r.page);
                     },
                   );
                 },

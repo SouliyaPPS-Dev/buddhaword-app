@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -153,6 +154,35 @@ class SearchResult {
   }
 }
 
+class GlobalSearchResult {
+  final String slug;
+  final String bookTitle;
+  final String bookType;
+  final int page;
+  final String snippet;
+  final int matches;
+
+  GlobalSearchResult({
+    required this.slug,
+    required this.bookTitle,
+    required this.bookType,
+    required this.page,
+    required this.snippet,
+    required this.matches,
+  });
+
+  factory GlobalSearchResult.fromJson(Map<String, dynamic> json) {
+    return GlobalSearchResult(
+      slug: json['slug'] ?? '',
+      bookTitle: json['bookTitle'] ?? '',
+      bookType: json['bookType'] ?? '',
+      page: json['page'] ?? 0,
+      snippet: json['snippet'] ?? '',
+      matches: json['matches'] ?? 0,
+    );
+  }
+}
+
 class SearchBooksProvider with ChangeNotifier {
   List<BookSummary> _books = [];
   bool _isLoading = false;
@@ -220,27 +250,42 @@ class SearchBooksProvider with ChangeNotifier {
     final cacheKey = 'searchBooks_detail_$slug';
     final cached = prefs.getString(cacheKey);
 
-    if (!await _hasInternet()) {
-      if (cached != null && cached.isNotEmpty) {
-        return BookDetail.fromJson(json.decode(cached) as Map<String, dynamic>);
+    if (await _hasInternet()) {
+      try {
+        final response = await http.get(
+          Uri.parse('$_baseUrl/api/search-books/details?slug=$slug'),
+        );
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body) as Map<String, dynamic>;
+          final detail = BookDetail.fromJson(data['book'] as Map<String, dynamic>);
+          await prefs.setString(cacheKey, json.encode(data['book']));
+          return detail;
+        }
+      } catch (e) {
+        if (kDebugMode) print('Error fetching book detail: $e');
       }
-      return null;
+    }
+
+    if (cached != null && cached.isNotEmpty) {
+      return BookDetail.fromJson(json.decode(cached) as Map<String, dynamic>);
     }
 
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/api/search-books/details?slug=$slug'),
+      final bookJson = await rootBundle.loadString(
+        'assets/search_books/$slug/book.json',
       );
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        final detail = BookDetail.fromJson(data['book'] as Map<String, dynamic>);
-        await prefs.setString(cacheKey, json.encode(data['book']));
-        return detail;
-      }
+      final data = json.decode(bookJson) as Map<String, dynamic>;
+      return BookDetail(
+        slug: slug,
+        title: data['title'] ?? '',
+        year: data['year'] ?? 0,
+        totalPages: data['totalPages'] ?? 0,
+        type: data['type'] ?? '',
+        coverUrl: 'assets/search_books/$slug/cover.png',
+        preview: '',
+      );
     } catch (e) {
-      if (cached != null && cached.isNotEmpty) {
-        return BookDetail.fromJson(json.decode(cached) as Map<String, dynamic>);
-      }
+      if (kDebugMode) print('Error loading book asset for $slug: $e');
     }
     return null;
   }
@@ -250,48 +295,181 @@ class SearchBooksProvider with ChangeNotifier {
     final cacheKey = 'searchBooks_page_${slug}_$pageNum';
     final cached = prefs.getString(cacheKey);
 
-    if (!await _hasInternet()) {
-      if (cached != null && cached.isNotEmpty) {
-        return PageNavResult.fromJson(json.decode(cached) as Map<String, dynamic>);
+    if (await _hasInternet()) {
+      try {
+        String url = '$_baseUrl/api/search-books/page-nav?book=$slug&n=$pageNum';
+        if (highlight != null && highlight.isNotEmpty) {
+          url += '&q=${Uri.encodeComponent(highlight)}';
+        }
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body) as Map<String, dynamic>;
+          final result = PageNavResult.fromJson(data);
+          await prefs.setString(cacheKey, json.encode(data));
+          return result;
+        }
+      } catch (e) {
+        if (kDebugMode) print('Error fetching page: $e');
       }
-      return null;
+    }
+
+    if (cached != null && cached.isNotEmpty) {
+      return PageNavResult.fromJson(json.decode(cached) as Map<String, dynamic>);
     }
 
     try {
-      String url = '$_baseUrl/api/search-books/page-nav?book=$slug&n=$pageNum';
-      if (highlight != null && highlight.isNotEmpty) {
-        url += '&q=${Uri.encodeComponent(highlight)}';
-      }
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        final result = PageNavResult.fromJson(data);
-        await prefs.setString(cacheKey, json.encode(data));
-        return result;
-      }
+      final pagesJson = await rootBundle.loadString(
+        'assets/search_books/$slug/pages.json',
+      );
+      final pages = json.decode(pagesJson) as List;
+      final pageEntry = pages.firstWhere(
+        (p) => p['page'] == pageNum,
+        orElse: () => <String, dynamic>{},
+      );
+      if (pageEntry.isEmpty) return null;
+
+      final totalPages = pages.length;
+      return PageNavResult(
+        bookSlug: slug,
+        bookTitle: slug,
+        totalPages: totalPages,
+        page: PageContent(
+          number: pageNum,
+          text: pageEntry['text'] ?? '',
+        ),
+        highlightWords: highlight != null && highlight.isNotEmpty
+            ? [highlight]
+            : [],
+        prevPage: pageNum > 1 ? pageNum - 1 : null,
+        nextPage: pageNum < totalPages ? pageNum + 1 : null,
+      );
     } catch (e) {
-      if (cached != null && cached.isNotEmpty) {
-        return PageNavResult.fromJson(json.decode(cached) as Map<String, dynamic>);
-      }
+      if (kDebugMode) print('Error loading page asset for $slug: $e');
     }
     return null;
   }
 
+  Future<List<GlobalSearchResult>> searchAll(String query) async {
+    if (query.trim().isEmpty) return [];
+    final q = query.toLowerCase();
+
+    if (await _hasInternet()) {
+      try {
+        final response = await http.get(
+          Uri.parse('$_baseUrl/api/search-books/all?q=${Uri.encodeComponent(query)}'),
+        );
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body) as Map<String, dynamic>;
+          return (data['results'] as List)
+              .map((e) => GlobalSearchResult.fromJson(e as Map<String, dynamic>))
+              .toList();
+        }
+      } catch (e) {
+        if (kDebugMode) print('Error searching all books: $e');
+      }
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString('searchBooks_list');
+    Map<String, String> slugToTitle = {};
+    if (cached != null && cached.isNotEmpty) {
+      final books = json.decode(cached) as List;
+      for (final b in books) {
+        slugToTitle[b['slug']] = b['title'] ?? b['slug'];
+      }
+    }
+
+    final slugs = slugToTitle.keys.toList();
+    if (slugs.isEmpty) return [];
+
+    List<GlobalSearchResult> results = [];
+    for (final slug in slugs) {
+      try {
+        final indexJson = await rootBundle.loadString(
+          'assets/search_books/$slug/index.json',
+        );
+        final indexEntries = json.decode(indexJson) as List;
+        for (final entry in indexEntries) {
+          final page = entry['page'] as int;
+          final preview = entry['preview'] as String? ?? '';
+          if (preview.toLowerCase().contains(q)) {
+            int count = 0;
+            int start = 0;
+            while ((start = preview.toLowerCase().indexOf(q, start)) != -1) {
+              count++;
+              start += q.length;
+            }
+            results.add(GlobalSearchResult(
+              slug: slug,
+              bookTitle: slugToTitle[slug] ?? slug,
+              bookType: '',
+              page: page,
+              snippet: preview,
+              matches: count,
+            ));
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) print('Error loading asset for $slug: $e');
+      }
+    }
+    return results;
+  }
+
   Future<List<SearchResult>> searchInBook(String slug, String query) async {
-    if (!await _hasInternet()) return [];
+    if (query.trim().isEmpty) return [];
+    final q = query.toLowerCase();
+
+    if (await _hasInternet()) {
+      try {
+        final response = await http.get(
+          Uri.parse('$_baseUrl/api/search-books/search?book=$slug&q=${Uri.encodeComponent(query)}'),
+        );
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body) as Map<String, dynamic>;
+          return (data['results'] as List)
+              .map((e) => SearchResult.fromJson(e as Map<String, dynamic>))
+              .toList();
+        }
+      } catch (e) {
+        if (kDebugMode) print('Error searching in book: $e');
+      }
+    }
 
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/api/search-books/search?book=$slug&q=${Uri.encodeComponent(query)}'),
+      final pagesJson = await rootBundle.loadString(
+        'assets/search_books/$slug/pages.json',
       );
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        return (data['results'] as List)
-            .map((e) => SearchResult.fromJson(e as Map<String, dynamic>))
-            .toList();
+      final pages = json.decode(pagesJson) as List;
+      List<SearchResult> results = [];
+      for (final entry in pages) {
+        final page = entry['page'] as int;
+        final text = entry['text'] as String? ?? '';
+        if (text.toLowerCase().contains(q)) {
+          int count = 0;
+          int start = 0;
+          while ((start = text.toLowerCase().indexOf(q, start)) != -1) {
+            count++;
+            start += q.length;
+          }
+
+          final matchIdx = text.toLowerCase().indexOf(q);
+          final snippetStart = matchIdx > 100 ? matchIdx - 100 : 0;
+          final snippetEnd = snippetStart + 300 < text.length
+              ? snippetStart + 300
+              : text.length;
+          final snippet = text.substring(snippetStart, snippetEnd);
+
+          results.add(SearchResult(
+            page: page,
+            snippet: snippet,
+            matches: count,
+          ));
+        }
       }
+      return results;
     } catch (e) {
-      if (kDebugMode) print('Error searching in book: $e');
+      if (kDebugMode) print('Error loading pages for $slug: $e');
     }
     return [];
   }

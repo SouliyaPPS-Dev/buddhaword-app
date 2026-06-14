@@ -119,6 +119,7 @@ flutter:
     - assets/wisdom.jpg
     - assets/ພຸດທະປະຫວັດ.jpg
     - assets/ອິທິບາດ 4.jpg
+    - assets/search_books/
 
   fonts:
     - family: NotoSerifLao
