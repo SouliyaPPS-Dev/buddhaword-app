@@ -18,6 +18,7 @@ import '../pages/Sutra/etipitaka_page.dart';
 import '../pages/Sutra/SearchPage.dart';
 import '../pages/Sutra/FavoritePage.dart';
 import '../pages/Video/VideoPage.dart';
+import '../pages/SearchBooks/SearchBooksListPage.dart';
 
 class NavigationDrawer extends StatefulWidget {
   const NavigationDrawer({super.key});
@@ -95,12 +96,11 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
     }
   }
 
-  void _openLinkSearchBooks() async {
-    if (await canLaunch('https://buddhaword-web.hf.space/search-books')) {
-      await launch('https://buddhaword-web.hf.space/search-books');
-    } else {
-      throw 'Could not launch https://buddhaword-web.hf.space/search-books';
-    }
+  void _openLinkSearchBooks() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SearchBooksListPage()),
+    );
   }
 
   void _openLinkEnglish() async {

@@ -27,7 +27,9 @@ import 'providers/books_provider.dart';
 import 'providers/calendar_provider.dart';
 import 'providers/sutra_provider.dart';
 import 'providers/video_provider.dart';
+import 'providers/search_books_provider.dart';
 import 'pages/Video/PlayVideoPage.dart';
+import 'pages/SearchBooks/SearchBooksListPage.dart';
 import 'themes/ThemeProvider.dart';
 
 import 'pages/Sutra/SearchPage.dart';
@@ -41,6 +43,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => VideoProvider()),
         ChangeNotifierProvider(create: (_) => CalendarProvider()),
         ChangeNotifierProvider(create: (_) => BooksProvider()),
+        ChangeNotifierProvider(create: (_) => SearchBooksProvider()),
       ],
       child: const MyApp(),
     ),
@@ -140,6 +143,7 @@ class _MyAppState extends State<MyApp> {
           },
         ),
         GoRoute(path: '/book', builder: (context, state) => BooksPage()),
+        GoRoute(path: '/search-books', builder: (context, state) => const SearchBooksListPage()),
         GoRoute(
           path: '/video',
           builder: (context, state) => VideoPage(title: 'ວີດີໂອ Video'),
