@@ -12,13 +12,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../main.dart';
 import '../pages/Books/BooksPage.dart';
 import '../pages/Sutra/ContactInfoPage.dart';
-import '../pages/Sutra/AnakameSutraPage.dart';
-import '../pages/Sutra/UttayarndhamPage.dart';
-import '../pages/Sutra/etipitaka_page.dart';
 import '../pages/Sutra/SearchPage.dart';
 import '../pages/Sutra/FavoritePage.dart';
 import '../pages/Video/VideoPage.dart';
-import '../pages/SearchBooks/SearchBooksListPage.dart';
+import '../pages/SearchBooks/search_books_list_page.dart';
 
 class NavigationDrawer extends StatefulWidget {
   const NavigationDrawer({super.key});
@@ -682,120 +679,150 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
         const SizedBox(height: 8),
         _menuTile(
           index: 1,
-          leading: const Icon(Icons.search, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.search,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ຄົ້ນຫາປຶ້ມ',
           onTap: () => _openLinkSearchBooks(),
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 2,
-          leading: const Icon(Icons.favorite, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.favorite,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ພຣະສູດທີຖືກໃຈ',
           onTap: () => {context.push('/favorites')},
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 3,
-          leading: const Icon(Icons.book_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.book_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ປື້ມ & ເເຜນຜັງ',
           onTap: () => _openLinkBooks(),
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 4,
-          leading: const Icon(Icons.sunny, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.sunny,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ພຣະທັມ',
           onTap: () => _openLinkDhamma(),
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 5,
-          leading: const Icon(Icons.video_collection_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.video_collection_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ວີດີໂອ Video',
           onTap: () => _openLinkVideo(),
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 6,
-          leading: const Icon(Icons.calendar_month_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.calendar_month_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ປະຕິທິນທັມ',
           onTap: () => _openLinkCalendar(),
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 7,
-          leading: const Icon(Icons.search_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.search_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'E-Tipitaka',
-          onTap: () => {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => EtipitakaSearchPage()),
-            ),
-          },
+          onTap: () => {context.push('/etipitaka')},
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 8,
-          leading: const Icon(Icons.menu_book_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.menu_book_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'Anakame (ภาษาไทย)',
-          onTap: () => {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => AnakameSutraPage()),
-            ),
-          },
+          onTap: () => {context.push('/thaisutra')},
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 9,
-          leading: const Icon(Icons.library_books_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.library_books_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'Uttayarndham (ธรรมะ)',
-          onTap: () => {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => UttayarndhamPage()),
-            ),
-          },
+          onTap: () => {context.push('/uttayarndham')},
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 10,
-          leading: const Icon(Icons.language_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.language_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'Buddhaword English',
           onTap: () => _openLinkEnglish(),
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 11,
-          leading: const Icon(Icons.newspaper_rounded, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.newspaper_rounded,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ຂ່າວສານ',
           onTap: () => _openLinkNews(),
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 12,
-          leading: const Icon(Icons.message_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.message_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ສົນທະນາ',
           onTap: () => _openLinkChat(),
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 13,
-          leading: const Icon(Icons.chat_bubble_rounded, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.chat_bubble_rounded,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ກຸ່ມສົນທະນາທັມ',
           onTap: () => _openLinkGroupChat(),
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 14,
-          leading: const Icon(Icons.contact_page_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.contact_page_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ຂໍ້ມູນຕິດຕໍ່',
           onTap: () => {context.push('/contact')},
         ),
         const SizedBox(height: 8),
         _menuTile(
           index: 15,
-          leading: const Icon(Icons.update_outlined, color: Color.fromARGB(255, 175, 93, 78)),
+          leading: const Icon(
+            Icons.update_outlined,
+            color: Color.fromARGB(255, 175, 93, 78),
+          ),
           title: 'ອັບເດດຂໍ້ມູນໃໝ່',
           onTap: _handleTap,
         ),

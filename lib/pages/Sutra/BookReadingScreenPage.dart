@@ -911,7 +911,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
             height: 48,
             child: FloatingActionButton(
               heroTag: 'fab5',
-              onPressed: _isTtsLoading ? null : _speakContent,
+              onPressed: _speakContent,
               backgroundColor: _isTtsSpeaking ? Colors.brown : const Color(0xFFF5F5F5),
               child: _isTtsLoading
                   ? SizedBox(
@@ -919,7 +919,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.brown,
+                        color: Colors.white,
                       ),
                     )
                   : Icon(
@@ -998,6 +998,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
   }
 
   Future<void> _speakContent() async {
+    if (_isTtsLoading) return;
     if (_isTtsSpeaking || _isTtsLoading) {
       _ttsRunId++;
       _player.stop();
@@ -1031,6 +1032,8 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
         _duration = Duration.zero;
       });
     }
+
+    await Future.delayed(Duration.zero);
 
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();

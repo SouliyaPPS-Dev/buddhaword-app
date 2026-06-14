@@ -361,6 +361,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
   }
 
   Future<void> _speakContent() async {
+    if (_isTtsLoading) return;
     if (_plainText == null) return;
     if (_ttsActive) {
       _stopTts();
@@ -385,6 +386,8 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
         _isTtsLoading = true;
       });
     }
+
+    await Future.delayed(Duration.zero);
 
     _setupTtsListeners();
 
@@ -723,7 +726,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
       height: 48,
       child: FloatingActionButton(
         heroTag: 'fab_volume',
-        onPressed: _isTtsLoading ? null : _speakContent,
+        onPressed: _speakContent,
         backgroundColor: _ttsActive ? Colors.brown : const Color(0xFFF5F5F5),
         child: _isTtsLoading
             ? SizedBox(
@@ -731,7 +734,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.brown,
+                  color: Colors.white,
                 ),
               )
             : Icon(

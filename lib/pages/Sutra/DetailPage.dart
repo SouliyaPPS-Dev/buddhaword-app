@@ -659,7 +659,7 @@ class _DetailPageState extends State<DetailPage> {
       height: 48,
       child: FloatingActionButton(
         heroTag: 'fab_volume',
-        onPressed: _isLoadingAudio ? null : _speakContent,
+        onPressed: _speakContent,
         backgroundColor: _audioMode == _AudioMode.tts
             ? Colors.brown
             : const Color(0xFFF5F5F5),
@@ -669,7 +669,7 @@ class _DetailPageState extends State<DetailPage> {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.brown,
+                  color: Colors.white,
                 ),
               )
             : Icon(
@@ -1090,6 +1090,7 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Future<void> _speakContent() async {
+    if (_isLoadingAudio) return;
     // Stop existing TTS
     if (_audioMode == _AudioMode.tts) {
       await _player.stop();
@@ -1143,6 +1144,8 @@ class _DetailPageState extends State<DetailPage> {
         _duration = Duration.zero;
       });
     }
+
+    await Future.delayed(Duration.zero);
 
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();

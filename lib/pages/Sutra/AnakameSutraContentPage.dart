@@ -425,6 +425,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   }
 
   Future<void> _speakContent() async {
+    if (_isTtsLoading) return;
     if (_ttsActive) {
       await _player.stop();
       if (mounted) {
@@ -464,6 +465,8 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
         _duration = Duration.zero;
       });
     }
+
+    await Future.delayed(Duration.zero);
 
     _setupTtsListeners();
 
@@ -895,7 +898,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       height: 48,
       child: FloatingActionButton(
         heroTag: 'fab_volume',
-        onPressed: _isTtsLoading ? null : _speakContent,
+        onPressed: _speakContent,
         backgroundColor: _ttsActive
             ? Colors.brown
             : const Color(0xFFF5F5F5),
@@ -905,7 +908,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.brown,
+                  color: Colors.white,
                 ),
               )
             : Icon(

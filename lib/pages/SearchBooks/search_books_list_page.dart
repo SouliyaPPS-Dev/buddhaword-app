@@ -6,7 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
 import '../../providers/search_books_provider.dart';
-import 'SearchBooksReaderPage.dart';
+import 'search_books_reader_page.dart';
 
 class SearchBooksListPage extends StatefulWidget {
   const SearchBooksListPage({super.key});

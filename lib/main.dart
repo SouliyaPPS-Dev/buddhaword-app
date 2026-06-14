@@ -29,7 +29,7 @@ import 'providers/sutra_provider.dart';
 import 'providers/video_provider.dart';
 import 'providers/search_books_provider.dart';
 import 'pages/Video/PlayVideoPage.dart';
-import 'pages/SearchBooks/SearchBooksListPage.dart';
+import 'pages/SearchBooks/search_books_list_page.dart';
 import 'themes/ThemeProvider.dart';
 
 import 'pages/Sutra/SearchPage.dart';
@@ -143,7 +143,10 @@ class _MyAppState extends State<MyApp> {
           },
         ),
         GoRoute(path: '/book', builder: (context, state) => BooksPage()),
-        GoRoute(path: '/search-books', builder: (context, state) => const SearchBooksListPage()),
+        GoRoute(
+          path: '/search-books',
+          builder: (context, state) => const SearchBooksListPage(),
+        ),
         GoRoute(
           path: '/video',
           builder: (context, state) => VideoPage(title: 'ວີດີໂອ Video'),

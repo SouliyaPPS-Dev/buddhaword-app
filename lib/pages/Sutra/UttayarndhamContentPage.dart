@@ -413,6 +413,7 @@ class _UttayarndhamContentPageState
   }
 
   Future<void> _speakContent() async {
+    if (_isTtsLoading) return;
     if (_htmlContent == null) return;
     if (_ttsActive) {
       _stopTts();
@@ -437,6 +438,8 @@ class _UttayarndhamContentPageState
         _isTtsLoading = true;
       });
     }
+
+    await Future.delayed(Duration.zero);
 
     _setupTtsListeners();
 
@@ -803,7 +806,7 @@ class _UttayarndhamContentPageState
       height: 48,
       child: FloatingActionButton(
         heroTag: 'fab_volume',
-        onPressed: _isTtsLoading ? null : _speakContent,
+        onPressed: _speakContent,
         backgroundColor: _ttsActive
             ? Colors.brown
             : const Color(0xFFF5F5F5),
@@ -813,7 +816,7 @@ class _UttayarndhamContentPageState
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.brown,
+                  color: Colors.white,
                 ),
               )
             : Icon(

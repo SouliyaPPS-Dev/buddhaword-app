@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../services/etipitaka_database_service.dart';
 import '../../themes/ThemeProvider.dart';
 import 'etipitaka_content_page.dart';
+import '../../layouts/NavigationDrawer.dart' as custom_nav;
 
 class EtipitakaItem {
   final int volume;
@@ -230,8 +231,15 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
               );
             },
           ),
+          Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu_open, color: Colors.white),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
         ],
       ),
+      drawer: const custom_nav.NavigationDrawer(),
       body: _buildBody(isDark),
     );
   }

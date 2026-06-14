@@ -801,7 +801,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.brown,
+                  color: Colors.white,
                 ),
               )
             : Icon(
@@ -949,6 +949,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   }
 
   Future<void> _speakContent() async {
+    if (_isLoadingAudio) return;
     if (_audioMode == _AudioMode.tts) {
       await _player.stop();
       _ttsChunkBytes.clear();
@@ -986,6 +987,8 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
         _duration = Duration.zero;
       });
     }
+    // ensure the frame with spinner renders before blocking on API
+    await Future.delayed(Duration.zero);
 
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();

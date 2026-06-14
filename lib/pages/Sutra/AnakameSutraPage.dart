@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../../themes/ThemeProvider.dart';
+import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import 'AnakameSutraContentPage.dart';
 
 class AnakameSutraItem {
@@ -223,8 +224,15 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
               );
             },
           ),
+          Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu_open, color: Colors.white),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
         ],
       ),
+      drawer: const custom_nav.NavigationDrawer(),
       body: _buildBody(),
     );
   }
