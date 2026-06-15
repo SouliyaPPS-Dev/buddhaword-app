@@ -120,6 +120,26 @@ flutter:
     - assets/ພຸດທະປະຫວັດ.jpg
     - assets/ອິທິບາດ 4.jpg
     - assets/search_books/
+    - assets/search_books/0/
+    - assets/search_books/1/
+    - assets/search_books/2/
+    - assets/search_books/3/
+    - assets/search_books/4/
+    - assets/search_books/5/
+    - assets/search_books/6/
+    - assets/search_books/7/
+    - assets/search_books/8/
+    - assets/search_books/9/
+    - assets/search_books/10/
+    - assets/search_books/11/
+    - assets/search_books/12/
+    - assets/search_books/13/
+    - assets/search_books/14/
+    - assets/search_books/15/
+    - assets/search_books/16/
+    - assets/search_books/17/
+    - assets/search_books/18/
+    - assets/search_books/19/
 
   fonts:
     - family: NotoSerifLao

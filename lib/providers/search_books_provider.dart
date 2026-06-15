@@ -189,10 +189,17 @@ class SearchBooksProvider with ChangeNotifier {
   List<BookSummary> _books = [];
   bool _isLoading = false;
   String? _error;
+  final Map<String, int> _slugToIndex = {};
 
   List<BookSummary> get books => _books;
   bool get isLoading => _isLoading;
   String? get error => _error;
+
+  String _assetDir(String slug) {
+    final idx = _slugToIndex[slug];
+    if (idx != null) return 'assets/search_books/$idx';
+    return 'assets/search_books/$slug';
+  }
 
   Future<String> _getBookTitle(String slug) async {
     final match = _books.where((b) => b.slug == slug);
@@ -209,17 +216,29 @@ class SearchBooksProvider with ChangeNotifier {
         'assets/search_books/books.json',
       );
       final list = json.decode(manifestJson) as List;
-      return list.map((e) {
+      final results = <BookSummary>[];
+      _slugToIndex.clear();
+      for (int i = 0; i < list.length; i++) {
+        final e = list[i];
         final slug = e['slug'] as String? ?? '';
-        return BookSummary(
+        _slugToIndex[slug] = i;
+        final dir = _assetDir(slug);
+        String coverUrl = '$dir/cover.png';
+        try {
+          await rootBundle.load(coverUrl);
+        } catch (_) {
+          coverUrl = '$dir/cover.jpg';
+        }
+        results.add(BookSummary(
           slug: slug,
           title: e['title'] as String? ?? slug,
           year: 0,
           totalPages: e['totalPages'] as int? ?? 0,
           type: e['type'] as String? ?? '',
-          coverUrl: 'assets/search_books/$slug/cover.png',
-        );
-      }).toList();
+          coverUrl: coverUrl,
+        ));
+      }
+      return results;
     } catch (e) {
       if (kDebugMode) print('Error loading manifest: $e');
     }
@@ -309,17 +328,24 @@ class SearchBooksProvider with ChangeNotifier {
     }
 
     try {
+      final dir = _assetDir(slug);
       final bookJson = await rootBundle.loadString(
-        'assets/search_books/$slug/book.json',
+        '$dir/book.json',
       );
       final data = json.decode(bookJson) as Map<String, dynamic>;
+      String coverUrl = '$dir/cover.png';
+      try {
+        await rootBundle.load(coverUrl);
+      } catch (_) {
+        coverUrl = '$dir/cover.jpg';
+      }
       return BookDetail(
         slug: slug,
         title: data['title'] ?? '',
         year: data['year'] ?? 0,
         totalPages: data['totalPages'] ?? 0,
         type: data['type'] ?? '',
-        coverUrl: 'assets/search_books/$slug/cover.png',
+        coverUrl: coverUrl,
         preview: '',
       );
     } catch (e) {
@@ -356,8 +382,9 @@ class SearchBooksProvider with ChangeNotifier {
     }
 
     try {
+      final dir = _assetDir(slug);
       final pagesJson = await rootBundle.loadString(
-        'assets/search_books/$slug/pages.json',
+        '$dir/pages.json',
       );
       final pages = json.decode(pagesJson) as List;
       final pageEntry = pages.firstWhere(
@@ -433,8 +460,9 @@ class SearchBooksProvider with ChangeNotifier {
     List<GlobalSearchResult> results = [];
     for (final slug in slugs) {
       try {
+        final dir = _assetDir(slug);
         final indexJson = await rootBundle.loadString(
-          'assets/search_books/$slug/index.json',
+          '$dir/index.json',
         );
         final indexEntries = json.decode(indexJson) as List;
         for (final entry in indexEntries) {
@@ -485,8 +513,9 @@ class SearchBooksProvider with ChangeNotifier {
     }
 
     try {
+      final dir = _assetDir(slug);
       final pagesJson = await rootBundle.loadString(
-        'assets/search_books/$slug/pages.json',
+        '$dir/pages.json',
       );
       final pages = json.decode(pagesJson) as List;
       List<SearchResult> results = [];

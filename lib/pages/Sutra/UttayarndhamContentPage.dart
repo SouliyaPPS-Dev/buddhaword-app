@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
@@ -70,6 +71,9 @@ class _UttayarndhamContentPageState
   final Map<int, String> _contentCache = {};
   late PageController _pageController;
 
+  bool _isOffline = false;
+  StreamSubscription? _connectivitySubscription;
+
   @override
   void initState() {
     super.initState();
@@ -80,6 +84,9 @@ class _UttayarndhamContentPageState
     _fetchContent();
     _loadFontSizeFromSharedPreferences();
     _loadFavoriteState();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+      if (mounted) setState(() => _isOffline = results.contains(ConnectivityResult.none));
+    });
   }
 
   Future<void> _fetchContent() async {
@@ -488,6 +495,7 @@ class _UttayarndhamContentPageState
   @override
   void dispose() {
     _ttsRunId++;
+    _connectivitySubscription?.cancel();
     _ttsActive = false;
     _player.stop();
     _playerStateSubscription?.cancel();
@@ -569,6 +577,7 @@ class _UttayarndhamContentPageState
         children: [
           Column(
             children: [
+              _buildOfflineBanner(),
               Expanded(child: _buildBody()),
               _buildTtsBar(),
             ],
@@ -649,6 +658,27 @@ class _UttayarndhamContentPageState
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildOfflineBanner() {
+    if (!_isOffline) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.orange.shade800,
+      child: const Row(
+        children: [
+          Icon(Icons.wifi_off, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'No internet connection',
+              style: TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

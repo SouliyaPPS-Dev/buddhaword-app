@@ -1,9 +1,11 @@
 // ignore_for_file: file_names, library_private_types_in_public_api, prefer_const_constructors, deprecated_member_use
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../../themes/ThemeProvider.dart';
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
@@ -45,15 +47,22 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
   final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
 
+  bool _isOffline = false;
+  StreamSubscription? _connectivitySubscription;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
     _fetchListing();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
+      if (mounted) setState(() => _isOffline = results.contains(ConnectivityResult.none));
+    });
   }
 
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -233,7 +242,33 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
         ],
       ),
       drawer: const custom_nav.NavigationDrawer(),
-      body: _buildBody(),
+      body: Column(
+        children: [
+          _buildOfflineBanner(),
+          Expanded(child: _buildBody()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfflineBanner() {
+    if (!_isOffline) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.orange.shade800,
+      child: const Row(
+        children: [
+          Icon(Icons.wifi_off, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'No internet connection',
+              style: TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
