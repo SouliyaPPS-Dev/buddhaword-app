@@ -522,8 +522,11 @@ class _SearchPageState extends State<SearchPage> {
 
     if (_selectedSource == 'uttayarndham' || _selectedSource == 'all') {
       try {
-        for (int page = 1; page <= 3; page++) {
-          final url = 'https://uttayarndham.org/dhamma-sharing?page=$page';
+        final Set<String> seenUrls = {};
+        for (int page = 0; page <= 3; page++) {
+          final url = page == 0
+              ? 'https://uttayarndham.org/dhamma-sharing'
+              : 'https://uttayarndham.org/dhamma-sharing?page=$page';
           final response = await http.get(
             Uri.parse(url),
             headers: {'User-Agent': 'Mozilla/5.0'},
@@ -532,13 +535,14 @@ class _SearchPageState extends State<SearchPage> {
             final items = _parseUttayarndhamListing(response.body);
             final q = query.toLowerCase();
             for (final item in items) {
-              if (item['title'].toString().toLowerCase().contains(q)) {
+              final itemUrl = item['url'] as String;
+              if (item['title'].toString().toLowerCase().contains(q) && seenUrls.add(itemUrl)) {
                 results.add({
                   'source': 'uttayarndham',
                   'sourceLabel': 'Uttayarndham',
                   'title': item['title'],
                   'payload': {
-                    'contentUrl': 'https://uttayarndham.org${item['url']}',
+                    'contentUrl': 'https://uttayarndham.org$itemUrl',
                     'title': 'Uttayarndham',
                   },
                 });
@@ -619,7 +623,8 @@ class _SearchPageState extends State<SearchPage> {
   List<Map<String, dynamic>> _parseUttayarndhamListing(String html) {
     final items = <Map<String, dynamic>>[];
     final entryRegex = RegExp(
-      r'<h4><a href="([^"]+)"[^>]*>\s*([^<]+?)\s*</a></h4>',
+      r'<h4><a\s+href="\s*(/[^"]+)"[^>]*>\s*([^<]+?)\s*</a></h4>',
+      dotAll: true,
     );
     final matches = entryRegex.allMatches(html);
     for (final m in matches) {
@@ -627,7 +632,8 @@ class _SearchPageState extends State<SearchPage> {
     }
     if (items.isEmpty) {
       final fallbackRegex = RegExp(
-        r'<a href="(/[^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
+        r'<a\s+href="([^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
+        dotAll: true,
       );
       final fallbackMatches = fallbackRegex.allMatches(html);
       for (final m in fallbackMatches) {

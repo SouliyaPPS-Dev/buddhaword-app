@@ -99,12 +99,18 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
             if (isInitial) {
               _allItems = items;
             } else {
-              _allItems.addAll(items);
+              final existingUrls = _allItems.map((e) => e.url).toSet();
+              _allItems.addAll(items.where((e) => !existingUrls.contains(e.url)));
             }
             if (items.length < _pageSize) {
               _hasMore = false;
             }
-            _filteredItems = List.from(_allItems);
+            _filteredItems = _searchQuery.isEmpty
+                ? List.from(_allItems)
+                : _allItems
+                    .where((item) =>
+                        item.title.toLowerCase().contains(_searchQuery.toLowerCase()))
+                    .toList();
             _currentPage = page;
             _isLoading = false;
             _isLoadingMore = false;
@@ -175,7 +181,7 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
   List<UttayarndhamItem> _parseListing(String html) {
     final results = <UttayarndhamItem>[];
     final itemRegex = RegExp(
-      r'<h4><a\s+href="\s+(/[^"]+)"[^>]*>\s*([^<]+?)\s*</a></h4>',
+      r'<h4><a\s+href="\s*(/[^"]+)"[^>]*>\s*([^<]+?)\s*</a></h4>',
       dotAll: true,
     );
     for (final m in itemRegex.allMatches(html)) {
@@ -183,6 +189,19 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
       final title = m.group(2)!.trim();
       if (title.isNotEmpty) {
         results.add(UttayarndhamItem(title: title, url: href));
+      }
+    }
+    if (results.isEmpty) {
+      final fallbackRegex = RegExp(
+        r'<a\s+href="([^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
+        dotAll: true,
+      );
+      for (final m in fallbackRegex.allMatches(html)) {
+        final href = m.group(1)!.trim();
+        final title = m.group(2)!.trim();
+        if (href.contains('dhamma-sharing') && title.isNotEmpty) {
+          results.add(UttayarndhamItem(title: title, url: href));
+        }
       }
     }
     return results;

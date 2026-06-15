@@ -186,37 +186,43 @@ class _UttayarndhamContentPageState
   }
 
   String _extractContent(String html) {
-    // Try field--name-body first (main article body in Drupal)
-    const bodyClass = 'field--name-body';
-    final bodyIdx = html.indexOf(bodyClass);
-    if (bodyIdx >= 0) {
-      final target = _extractDiv(html, bodyIdx);
-      if (target != null) return target;
-    }
-    // Fall back to node__content
+    // Find node__content div boundaries
     const nodeClass = 'node__content';
     final nodeIdx = html.indexOf(nodeClass);
-    if (nodeIdx >= 0) {
-      final target = _extractDiv(html, nodeIdx);
-      if (target != null) return target;
+    if (nodeIdx < 0) return html;
+    final nodeDivStart = html.lastIndexOf('<div', nodeIdx);
+    if (nodeDivStart < 0) return html;
+    final nodeEndPos = _findDivEnd(html, nodeDivStart);
+    if (nodeEndPos < 0) return html;
+    final nodeContent = html.substring(nodeDivStart, nodeEndPos);
+
+    // Try field--name-body within node__content (avoids sidebar/menu matches)
+    const bodyClass = 'field--name-body';
+    final bodyIdx = nodeContent.indexOf(bodyClass);
+    if (bodyIdx >= 0) {
+      final bodyDivStart = nodeContent.lastIndexOf('<div', bodyIdx);
+      if (bodyDivStart >= 0) {
+        final bodyEndPos = _findDivEnd(nodeContent, bodyDivStart);
+        if (bodyEndPos > 0) {
+          return nodeContent.substring(bodyDivStart, bodyEndPos);
+        }
+      }
     }
-    return html;
+
+    return nodeContent;
   }
 
-  String? _extractDiv(String html, int classPos) {
-    final divStart = html.lastIndexOf('<div', classPos);
-    if (divStart < 0) return null;
+  int _findDivEnd(String html, int divStart) {
     int depth = 0;
-    int endPos = divStart;
     for (int i = divStart; i < html.length; i++) {
       if (html.substring(i).startsWith('<div')) { depth++; i += 3; }
       else if (html.substring(i).startsWith('</div>')) {
         depth--;
-        if (depth <= 0) { endPos = i + 6; break; }
+        if (depth <= 0) return i + 6;
         i += 5;
       }
     }
-    return html.substring(divStart, endPos);
+    return -1;
   }
 
   List<String> _extractParagraphs(String html) {

@@ -936,39 +936,106 @@ class _MyHomePageState extends State<MyHomePage> {
                           },
                         )
                       : ListView.builder(
-                          itemCount: _filteredData.length + (_searchTerm.isNotEmpty ? 1 : 0),
+                          itemCount: _filteredData.length + (_searchTerm.isNotEmpty ? 3 : 0),
                           itemBuilder: (context, index) {
-                            if (index == _filteredData.length && _searchTerm.isNotEmpty) {
-                              return Card(
-                                elevation: 4,
-                                margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12.0),
-                                  side: BorderSide(color: Colors.purple.withOpacity(0.5), width: 2),
-                                ),
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: Colors.purple.withOpacity(0.15),
-                                    child: const Icon(Icons.book, color: Colors.purple, size: 22),
+                            if (_searchTerm.isNotEmpty) {
+                              final searchCardIndex = index - _filteredData.length;
+                              if (searchCardIndex == 0) {
+                                return Card(
+                                  elevation: 4,
+                                  margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                    side: BorderSide(color: Colors.purple.withOpacity(0.5), width: 2),
                                   ),
-                                  title: Text(
-                                    'ຄົ້ນຫາ "$_searchTerm" ໃນປຶ້ມ',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 15,
-                                      color: Colors.purple,
+                                  child: ListTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor: Colors.purple.withOpacity(0.15),
+                                      child: const Icon(Icons.book, color: Colors.purple, size: 22),
                                     ),
+                                    title: Text(
+                                      'ຄົ້ນຫາ "$_searchTerm" ໃນປຶ້ມ',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                        color: Colors.purple,
+                                      ),
+                                    ),
+                                    subtitle: const Text(
+                                      'ຄົ້ນຫາຂໍ້ມູນຈາກປຶ້ມທັງໝົດ 20 ຫົວ',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                    trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.purple),
+                                    onTap: () {
+                                      context.push('/search?q=$_searchTerm&source=search_books');
+                                    },
                                   ),
-                                  subtitle: const Text(
-                                    'ຄົ້ນຫາຂໍ້ມູນຈາກປຶ້ມທັງໝົດ 20 ຫົວ',
-                                    style: TextStyle(fontSize: 13),
+                                );
+                              }
+                              if (searchCardIndex == 1) {
+                                return Card(
+                                  elevation: 4,
+                                  margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                    side: BorderSide(color: Colors.indigo.withOpacity(0.5), width: 2),
                                   ),
-                                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.purple),
-                                  onTap: () {
-                                    context.push('/search?q=$_searchTerm&source=search_books');
-                                  },
-                                ),
-                              );
+                                  child: ListTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor: Colors.indigo.withOpacity(0.15),
+                                      child: const Icon(Icons.menu_book, color: Colors.indigo, size: 22),
+                                    ),
+                                    title: Text(
+                                      'ຄົ້ນຫາ "$_searchTerm" ໃນ Anakame',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                        color: Colors.indigo,
+                                      ),
+                                    ),
+                                    subtitle: const Text(
+                                      'ຄົ້ນຫາຂໍ້ມູນຈາກ anakame.com',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                    trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.indigo),
+                                    onTap: () {
+                                      context.push('/search?q=$_searchTerm&source=anakame');
+                                    },
+                                  ),
+                                );
+                              }
+                              if (searchCardIndex == 2) {
+                                return Card(
+                                  elevation: 4,
+                                  margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                    side: BorderSide(color: Colors.deepOrange.withOpacity(0.5), width: 2),
+                                  ),
+                                  child: ListTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor: Colors.deepOrange.withOpacity(0.15),
+                                      child: const Icon(Icons.library_books, color: Colors.deepOrange, size: 22),
+                                    ),
+                                    title: Text(
+                                      'ຄົ້ນຫາ "$_searchTerm" ໃນ Uttayarndham',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                        color: Colors.deepOrange,
+                                      ),
+                                    ),
+                                    subtitle: const Text(
+                                      'ຄົ້ນຫາຂໍ້ມູນຈາກ uttayarndham.org',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                    trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.deepOrange),
+                                    onTap: () {
+                                      context.push('/search?q=$_searchTerm&source=uttayarndham');
+                                    },
+                                  ),
+                                );
+                              }
                             }
                             final rowData = _filteredData[index];
                             final id = rowData.isNotEmpty
