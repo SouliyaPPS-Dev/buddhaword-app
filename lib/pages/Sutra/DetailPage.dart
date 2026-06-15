@@ -65,7 +65,6 @@ class _DetailPageState extends State<DetailPage> {
   int _ttsRunId = 0;
   List<_WordRange> _ttsWords = [];
   int _ttsCurrentWordIndex = -1;
-  List<String> _ttsChunks = [];
   int _ttsChunkIndex = 0;
   List<int> _ttsChunkEnds = [];
 
@@ -74,7 +73,9 @@ class _DetailPageState extends State<DetailPage> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.items.isEmpty ? 0 : widget.initialIndex.clamp(0, widget.items.length - 1);
+    _currentIndex = widget.items.isEmpty
+        ? 0
+        : widget.initialIndex.clamp(0, widget.items.length - 1);
     _pageController = PageController(initialPage: _currentIndex);
     _loadFontSizeFromSharedPreferences();
     _loadFavoriteState();
@@ -357,7 +358,10 @@ class _DetailPageState extends State<DetailPage> {
 
       // 1) TTS bytes
       if (_ttsChunkBytes.isNotEmpty) {
-        final int totalLength = _ttsChunkBytes.fold(0, (sum, b) => sum + b.length);
+        final int totalLength = _ttsChunkBytes.fold(
+          0,
+          (sum, b) => sum + b.length,
+        );
         final Uint8List allBytes = Uint8List(totalLength);
         int offset = 0;
         for (final bytes in _ttsChunkBytes) {
@@ -387,7 +391,9 @@ class _DetailPageState extends State<DetailPage> {
       else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No audio to download. Play TTS first.')),
+            const SnackBar(
+              content: Text('No audio to download. Play TTS first.'),
+            ),
           );
         }
         return;
@@ -404,15 +410,15 @@ class _DetailPageState extends State<DetailPage> {
       await file.writeAsBytes(audioData);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Downloaded: $fileName')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Downloaded: $fileName')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Download failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
       }
     }
   }
@@ -474,7 +480,9 @@ class _DetailPageState extends State<DetailPage> {
     final currentItem = widget.items[_currentIndex];
 
     return Scaffold(
-      backgroundColor: _isDarkMode ? Colors.black : Color.fromRGBO(246, 238, 217, 1.0),
+      backgroundColor: _isDarkMode
+          ? Colors.black
+          : Color.fromRGBO(246, 238, 217, 1.0),
       appBar: _isFullScreen
           ? PreferredSize(
               preferredSize: Size.zero,
@@ -625,7 +633,10 @@ class _DetailPageState extends State<DetailPage> {
           ? null
           : Padding(
               padding: EdgeInsets.only(
-                bottom: (_audioMode == _AudioMode.tts || _ttsChunkBytes.isNotEmpty) ? 60 : 0,
+                bottom:
+                    (_audioMode == _AudioMode.tts || _ttsChunkBytes.isNotEmpty)
+                    ? 60
+                    : 0,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -634,7 +645,11 @@ class _DetailPageState extends State<DetailPage> {
                   const SizedBox(width: 12),
                   _buildFAB(Icons.remove, _decreaseFontSize, 'fab2'),
                   const SizedBox(width: 12),
-                  _buildFAB(Icons.content_copy, _copyContentToClipboard, 'fab3'),
+                  _buildFAB(
+                    Icons.content_copy,
+                    _copyContentToClipboard,
+                    'fab3',
+                  ),
                   const SizedBox(width: 12),
                   _buildFAB(Icons.share, _shareDetailLink, 'fab4'),
                   const SizedBox(width: 12),
@@ -692,46 +707,43 @@ class _DetailPageState extends State<DetailPage> {
     final bool hasAudio = audioUrl != '/';
 
     return Column(
-        children: [
-          const SizedBox(height: 10),
-          if (hasAudio && _audioMode != _AudioMode.tts) _buildAudioPlayer(audioUrl),
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: RepaintBoundary(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 10),
-                      Center(
-                        child: SelectableText(
-                          item['title'],
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
+      children: [
+        const SizedBox(height: 10),
+        if (hasAudio && _audioMode != _AudioMode.tts)
+          _buildAudioPlayer(audioUrl),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: RepaintBoundary(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 10),
+                    Center(
+                      child: SelectableText(
+                        item['title'],
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      const Divider(
-                        color: Colors.black,
-                        thickness: 1,
-                        height: 1,
-                      ),
-                      const SizedBox(height: 0),
-                      _buildSutraContent(item['details']),
-                      const SizedBox(height: 60),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Divider(color: Colors.black, thickness: 1, height: 1),
+                    const SizedBox(height: 0),
+                    _buildSutraContent(item['details']),
+                    const SizedBox(height: 60),
+                  ],
                 ),
               ),
             ),
           ),
-        ],
+        ),
+      ],
     );
   }
 
@@ -760,8 +772,14 @@ class _DetailPageState extends State<DetailPage> {
           Expanded(
             child: Slider(
               min: 0,
-              max: _duration.inMilliseconds.toDouble().clamp(1, double.infinity),
-              value: _position.inMilliseconds.toDouble().clamp(0, _duration.inMilliseconds.toDouble()),
+              max: _duration.inMilliseconds.toDouble().clamp(
+                1,
+                double.infinity,
+              ),
+              value: _position.inMilliseconds.toDouble().clamp(
+                0,
+                _duration.inMilliseconds.toDouble(),
+              ),
               onChanged: (v) => _player.seek(Duration(milliseconds: v.toInt())),
             ),
           ),
@@ -792,7 +810,10 @@ class _DetailPageState extends State<DetailPage> {
     final ranges = <_WordRange>[];
     int start = -1;
     for (int i = 0; i < text.length; i++) {
-      if (text[i] == ' ' || text[i] == '\n' || text[i] == '\t' || text[i] == '\r') {
+      if (text[i] == ' ' ||
+          text[i] == '\n' ||
+          text[i] == '\t' ||
+          text[i] == '\r') {
         if (start >= 0) {
           ranges.add(_WordRange(start, i));
           start = -1;
@@ -814,7 +835,8 @@ class _DetailPageState extends State<DetailPage> {
     final chunkEnd = _ttsChunkIndex < _ttsChunkEnds.length
         ? _ttsChunkEnds[_ttsChunkIndex]
         : _ttsWords.last.end;
-    final chunkStart = _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
+    final chunkStart =
+        _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
         ? _ttsChunkEnds[_ttsChunkIndex - 1]
         : 0;
     final chunkLength = chunkEnd - chunkStart;
@@ -845,13 +867,15 @@ class _DetailPageState extends State<DetailPage> {
       }
       final wordText = text.substring(r.start, r.end);
       final isCurrent = i == _ttsCurrentWordIndex;
-      spans.add(TextSpan(
-        text: wordText,
-        style: TextStyle(
-          backgroundColor: isCurrent ? Colors.yellow : null,
-          fontWeight: isCurrent ? FontWeight.bold : null,
+      spans.add(
+        TextSpan(
+          text: wordText,
+          style: TextStyle(
+            backgroundColor: isCurrent ? Colors.yellow : null,
+            fontWeight: isCurrent ? FontWeight.bold : null,
+          ),
         ),
-      ));
+      );
       lastEnd = r.end;
     }
     if (lastEnd < text.length) {
@@ -873,7 +897,6 @@ class _DetailPageState extends State<DetailPage> {
       _isLoadingAudio = false;
       _ttsWords = [];
       _ttsCurrentWordIndex = -1;
-      _ttsChunks = [];
       _ttsChunkIndex = 0;
       _ttsChunkEnds = [];
     });
@@ -932,9 +955,7 @@ class _DetailPageState extends State<DetailPage> {
                           ),
                         )
                       : Icon(
-                          _isPlaying
-                              ? Icons.pause
-                              : Icons.play_arrow,
+                          _isPlaying ? Icons.pause : Icons.play_arrow,
                           color: Colors.white,
                         ),
                   onPressed: _playPauseAudio,
@@ -1116,7 +1137,8 @@ class _DetailPageState extends State<DetailPage> {
         laoCount++;
       } else if (rune >= 0x0E00 && rune <= 0x0E7F) {
         thaiCount++;
-      } else if ((rune >= 0x41 && rune <= 0x5A) || (rune >= 0x61 && rune <= 0x7A)) {
+      } else if ((rune >= 0x41 && rune <= 0x5A) ||
+          (rune >= 0x61 && rune <= 0x7A)) {
         engCount++;
       }
     }
@@ -1215,8 +1237,6 @@ class _DetailPageState extends State<DetailPage> {
 
     final chunks = _chunkText(content);
     if (chunks.isEmpty) return;
-    _ttsChunks = chunks;
-
     // Reconstruct original end positions (reverse .trim() from _chunkText)
     _ttsChunkEnds = [];
     int pos = 0;
@@ -1273,9 +1293,15 @@ class _DetailPageState extends State<DetailPage> {
 
     // Pre-fetch first chunk synchronously (nothing is playing yet)
     File? file = await _fetchTtsChunk(0, chunks[0]);
-    if (file == null || runId != _ttsRunId || !mounted || _audioMode != _AudioMode.tts) {
+    if (file == null ||
+        runId != _ttsRunId ||
+        !mounted ||
+        _audioMode != _AudioMode.tts) {
       if (mounted && _audioMode == _AudioMode.tts) {
-        setState(() { _audioMode = _AudioMode.none; _isLoadingAudio = false; });
+        setState(() {
+          _audioMode = _AudioMode.none;
+          _isLoadingAudio = false;
+        });
       }
       return;
     }
@@ -1286,7 +1312,9 @@ class _DetailPageState extends State<DetailPage> {
     await _player.setSpeed(0.85);
     await _player.play();
     _ttsChunkBytes.add(await file.readAsBytes());
-    try { await file.delete(); } catch (_) {}
+    try {
+      await file.delete();
+    } catch (_) {}
 
     // Process remaining chunks with pre-fetch: while chunk N plays,
     // start fetching chunk N+1 in the background so it's ready when N finishes
@@ -1299,7 +1327,8 @@ class _DetailPageState extends State<DetailPage> {
       // Wait for current chunk playback to finish
       try {
         final state = _player.processingState;
-        if (state != ProcessingState.completed && state != ProcessingState.idle) {
+        if (state != ProcessingState.completed &&
+            state != ProcessingState.idle) {
           await _player.processingStateStream.firstWhere(
             (s) => s == ProcessingState.completed || s == ProcessingState.idle,
           );
@@ -1313,9 +1342,9 @@ class _DetailPageState extends State<DetailPage> {
       File? file = await prefetch;
       if (file == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('TTS error')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('TTS error')));
         }
         break;
       }
@@ -1325,14 +1354,17 @@ class _DetailPageState extends State<DetailPage> {
       await _player.setSpeed(0.85);
       await _player.play();
       _ttsChunkBytes.add(await file.readAsBytes());
-      try { await file.delete(); } catch (_) {}
+      try {
+        await file.delete();
+      } catch (_) {}
     }
 
     // Wait for last chunk to finish playing
     if (mounted && runId == _ttsRunId && _audioMode == _AudioMode.tts) {
       try {
         final state = _player.processingState;
-        if (state != ProcessingState.completed && state != ProcessingState.idle) {
+        if (state != ProcessingState.completed &&
+            state != ProcessingState.idle) {
           await _player.processingStateStream.firstWhere(
             (s) => s == ProcessingState.completed || s == ProcessingState.idle,
           );
@@ -1376,8 +1408,13 @@ class _DetailPageState extends State<DetailPage> {
       final response = await http.get(Uri.parse(detail));
       if (response.statusCode == 200) {
         String body = response.body.replaceAll('\uFEFF', '').trimLeft();
-        body = body.replaceAll(RegExp(r'^\s*<!DOCTYPE[^>]*>\s*', dotAll: true), '');
-        if (body.startsWith('<html') || body.startsWith('<head') || body.startsWith('<body')) {
+        body = body.replaceAll(
+          RegExp(r'^\s*<!DOCTYPE[^>]*>\s*', dotAll: true),
+          '',
+        );
+        if (body.startsWith('<html') ||
+            body.startsWith('<head') ||
+            body.startsWith('<body')) {
           return _extractPlainText(body);
         }
         return body;
@@ -1400,14 +1437,27 @@ class _DetailPageState extends State<DetailPage> {
         .replaceAll(RegExp(r'<[^>]*>'), '')
         .replaceAll(RegExp(r'&nbsp;'), ' ')
         .replaceAll(RegExp(r'\u00A0'), ' ')
-        .replaceAllMapped(RegExp(r'&#[0-9]+;'), (m) => String.fromCharCode(int.parse(m.group(0)!.substring(2, m.group(0)!.length - 1))))
-        .replaceAllMapped(RegExp(r'&#x[0-9a-fA-F]+;'), (m) => String.fromCharCode(int.parse(m.group(0)!.substring(3, m.group(0)!.length - 1), radix: 16)))
+        .replaceAllMapped(
+          RegExp(r'&#[0-9]+;'),
+          (m) => String.fromCharCode(
+            int.parse(m.group(0)!.substring(2, m.group(0)!.length - 1)),
+          ),
+        )
+        .replaceAllMapped(
+          RegExp(r'&#x[0-9a-fA-F]+;'),
+          (m) => String.fromCharCode(
+            int.parse(
+              m.group(0)!.substring(3, m.group(0)!.length - 1),
+              radix: 16,
+            ),
+          ),
+        )
         .replaceAll('&amp;', '&')
         .replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>')
         .replaceAll('&quot;', '"')
         .replaceAll('&apos;', "'");
-    return text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return text.replaceAll(RegExp(r'[ \t]+'), ' ').trim();
   }
 
   Future<void> _copyContentToClipboard() async {

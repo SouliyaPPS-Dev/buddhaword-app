@@ -145,7 +145,6 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
   List<String> _extractParagraphs(String text) {
     final lines = text
         .split('\n')
-        .expand((line) => line.split('.'))
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty && line.length >= 4)
         .toList();

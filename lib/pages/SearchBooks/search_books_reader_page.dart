@@ -40,16 +40,18 @@ class _SearchHighlightController extends TextEditingController {
       if (match.start > lastEnd) {
         spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
       }
-      spans.add(TextSpan(
-        text: text.substring(match.start, match.end),
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: isDark ? Colors.yellowAccent : Colors.brown.shade900,
-          backgroundColor: isDark
-              ? Colors.yellow.withValues(alpha: 0.3)
-              : const Color(0xFFFFD700),
+      spans.add(
+        TextSpan(
+          text: text.substring(match.start, match.end),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.yellowAccent : Colors.brown.shade900,
+            backgroundColor: isDark
+                ? Colors.yellow.withValues(alpha: 0.3)
+                : const Color(0xFFFFD700),
+          ),
         ),
-      ));
+      );
       lastEnd = match.end;
     }
     if (lastEnd < text.length) {
@@ -118,7 +120,6 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   bool _isFavorited = false;
   List<_WordRange> _ttsWords = [];
   int _ttsCurrentWordIndex = -1;
-  List<String> _ttsChunks = [];
   int _ttsChunkIndex = 0;
   List<int> _ttsChunkEnds = [];
 
@@ -176,12 +177,14 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     final favorites = List<String>.from(prefs.getStringList('favorites') ?? []);
     setState(() => _isFavorited = !_isFavorited);
     if (_isFavorited) {
-      favorites.add(json.encode({
-        'type': 'book',
-        'slug': widget.slug,
-        'title': widget.title,
-        'totalPages': _totalPages,
-      }));
+      favorites.add(
+        json.encode({
+          'type': 'book',
+          'slug': widget.slug,
+          'title': widget.title,
+          'totalPages': _totalPages,
+        }),
+      );
     } else {
       favorites.removeWhere((fav) {
         final data = json.decode(fav) as Map<String, dynamic>;
@@ -299,30 +302,30 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                   icon: const Icon(Icons.search, color: Colors.white),
                   onPressed: () => _showSearchInBookDialog(context),
                 ),
-          IconButton(
-            icon: const Icon(Icons.text_increase, color: Colors.white),
-            onPressed: _increaseFontSize,
-          ),
-          IconButton(
-            icon: const Icon(Icons.text_decrease, color: Colors.white),
-            onPressed: _decreaseFontSize,
-          ),
-          IconButton(
-            icon: Icon(
-              _bookTheme == BookTheme.dark
-                  ? Icons.dark_mode
-                  : Icons.light_mode,
-              color: Colors.white,
+                IconButton(
+                  icon: const Icon(Icons.text_increase, color: Colors.white),
+                  onPressed: _increaseFontSize,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.text_decrease, color: Colors.white),
+                  onPressed: _decreaseFontSize,
+                ),
+                IconButton(
+                  icon: Icon(
+                    _bookTheme == BookTheme.dark
+                        ? Icons.dark_mode
+                        : Icons.light_mode,
+                    color: Colors.white,
+                  ),
+                  onPressed: _cycleTheme,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.share, color: Colors.white),
+                  onPressed: _sharePage,
+                ),
+                const SizedBox(width: 4),
+              ],
             ),
-            onPressed: _cycleTheme,
-          ),
-          IconButton(
-            icon: const Icon(Icons.share, color: Colors.white),
-            onPressed: _sharePage,
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: Stack(
         children: [
           Column(
@@ -343,11 +346,18 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.cloud_off, size: 48, color: Colors.grey[400]),
+                              Icon(
+                                Icons.cloud_off,
+                                size: 48,
+                                color: Colors.grey[400],
+                              ),
                               const SizedBox(height: 16),
                               Text(
                                 'ບໍ່ສາມາດໂຫຼດຂໍ້ມູນໜ້ານີ້ໄດ້',
-                                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey[600],
+                                ),
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 12),
@@ -409,8 +419,11 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
               bottom: 80,
               child: Center(
                 child: IconButton(
-                  icon: Icon(Icons.arrow_back_ios_new,
-                      color: Colors.brown.withValues(alpha: 0.5), size: 30),
+                  icon: Icon(
+                    Icons.arrow_back_ios_new,
+                    color: Colors.brown.withValues(alpha: 0.5),
+                    size: 30,
+                  ),
                   onPressed: () {
                     _pageController.previousPage(
                       duration: const Duration(milliseconds: 300),
@@ -427,8 +440,11 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
               bottom: 80,
               child: Center(
                 child: IconButton(
-                  icon: Icon(Icons.arrow_forward_ios,
-                      color: Colors.brown.withValues(alpha: 0.5), size: 30),
+                  icon: Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.brown.withValues(alpha: 0.5),
+                    size: 30,
+                  ),
                   onPressed: () {
                     _pageController.nextPage(
                       duration: const Duration(milliseconds: 300),
@@ -459,59 +475,55 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
               ),
             ),
           if (!_isFullScreen)
-            Positioned(
-              bottom: 100,
-              right: 16,
-              child: _buildVolumeFab(),
-            ),
+            Positioned(bottom: 100, right: 16, child: _buildVolumeFab()),
         ],
       ),
       bottomNavigationBar: _isFullScreen
           ? null
           : Container(
-        color: Colors.brown,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.chevron_left, color: Colors.white),
-              onPressed: _currentPage > 1
-                  ? () {
-                      _pageController.previousPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    }
-                  : null,
-              iconSize: 32,
-            ),
-            GestureDetector(
-              onTap: _showPageJumpDialog,
-              child: Text(
-                '$_currentPage / $_totalPages',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+              color: Colors.brown,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, color: Colors.white),
+                    onPressed: _currentPage > 1
+                        ? () {
+                            _pageController.previousPage(
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                            );
+                          }
+                        : null,
+                    iconSize: 32,
+                  ),
+                  GestureDetector(
+                    onTap: _showPageJumpDialog,
+                    child: Text(
+                      '$_currentPage / $_totalPages',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, color: Colors.white),
+                    onPressed: _currentPage < _totalPages
+                        ? () {
+                            _pageController.nextPage(
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                            );
+                          }
+                        : null,
+                    iconSize: 32,
+                  ),
+                ],
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.chevron_right, color: Colors.white),
-              onPressed: _currentPage < _totalPages
-                  ? () {
-                      _pageController.nextPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    }
-                  : null,
-              iconSize: 32,
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -521,7 +533,11 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
         if (constraints.maxWidth < 200) {
           return Text(
             widget.title,
-            style: const TextStyle(fontSize: 14, letterSpacing: 0.5, color: Colors.white),
+            style: const TextStyle(
+              fontSize: 14,
+              letterSpacing: 0.5,
+              color: Colors.white,
+            ),
             overflow: TextOverflow.ellipsis,
           );
         }
@@ -531,7 +547,11 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
             Flexible(
               child: Text(
                 widget.title,
-                style: const TextStyle(fontSize: 14, letterSpacing: 0.5, color: Colors.white),
+                style: const TextStyle(
+                  fontSize: 14,
+                  letterSpacing: 0.5,
+                  color: Colors.white,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -540,7 +560,10 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
               GestureDetector(
                 onTap: _showPageJumpDialog,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(6),
@@ -613,7 +636,8 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
 
   bool _isTocPage(String text) {
     if (text.contains('ສາລະບານ') || text.contains('สารບັນ')) return true;
-    final lines = text.split('\n')
+    final lines = text
+        .split('\n')
         .map((l) => l.trim())
         .where((l) => l.isNotEmpty)
         .toList();
@@ -624,7 +648,8 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   }
 
   Widget _buildTocContent(String text, String? query) {
-    final lines = text.split('\n')
+    final lines = text
+        .split('\n')
         .map((l) => l.trim())
         .where((l) => l.isNotEmpty)
         .toList();
@@ -673,7 +698,10 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.brown.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
@@ -720,13 +748,15 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
       }
       final wordText = text.substring(r.start, r.end);
       final isCurrent = wordIndex == _ttsCurrentWordIndex;
-      spans.add(TextSpan(
-        text: wordText,
-        style: TextStyle(
-          backgroundColor: isCurrent ? Colors.yellow : null,
-          fontWeight: isCurrent ? FontWeight.bold : null,
+      spans.add(
+        TextSpan(
+          text: wordText,
+          style: TextStyle(
+            backgroundColor: isCurrent ? Colors.yellow : null,
+            fontWeight: isCurrent ? FontWeight.bold : null,
+          ),
         ),
-      ));
+      );
       lastEnd = r.end;
       wordIndex++;
     }
@@ -781,14 +811,16 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
       if (match.start > lastEnd) {
         spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
       }
-      spans.add(TextSpan(
-        text: text.substring(match.start, match.end),
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.brown.shade900,
-          backgroundColor: const Color(0xFFFFD700),
+      spans.add(
+        TextSpan(
+          text: text.substring(match.start, match.end),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.brown.shade900,
+            backgroundColor: const Color(0xFFFFD700),
+          ),
         ),
-      ));
+      );
       lastEnd = match.end;
     }
     if (lastEnd < text.length) {
@@ -905,10 +937,12 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
 
   void _sharePage() {
     final base = 'https://buddhaword-web.hf.space';
-    final queryParam = widget.highlightQuery != null && widget.highlightQuery!.isNotEmpty
+    final queryParam =
+        widget.highlightQuery != null && widget.highlightQuery!.isNotEmpty
         ? '?q=${Uri.encodeComponent(widget.highlightQuery!)}'
         : '';
-    final url = '$base/search-books/${widget.slug}/page/$_currentPage$queryParam';
+    final url =
+        '$base/search-books/${widget.slug}/page/$_currentPage$queryParam';
     final title = '${widget.title} - ໜ້າ $_currentPage';
     SharePlus.instance.share(ShareParams(text: url, title: title));
   }
@@ -967,8 +1001,14 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
           Expanded(
             child: Slider(
               min: 0,
-              max: _duration.inMilliseconds.toDouble().clamp(1, double.infinity),
-              value: _position.inMilliseconds.toDouble().clamp(0, _duration.inMilliseconds.toDouble()),
+              max: _duration.inMilliseconds.toDouble().clamp(
+                1,
+                double.infinity,
+              ),
+              value: _position.inMilliseconds.toDouble().clamp(
+                0,
+                _duration.inMilliseconds.toDouble(),
+              ),
               onChanged: (v) => _player.seek(Duration(milliseconds: v.toInt())),
             ),
           ),
@@ -1007,7 +1047,6 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
       _isLoadingAudio = false;
       _ttsWords = [];
       _ttsCurrentWordIndex = -1;
-      _ttsChunks = [];
       _ttsChunkIndex = 0;
       _ttsChunkEnds = [];
     });
@@ -1023,7 +1062,10 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     final ranges = <_WordRange>[];
     int start = -1;
     for (int i = 0; i < text.length; i++) {
-      if (text[i] == ' ' || text[i] == '\n' || text[i] == '\t' || text[i] == '\r') {
+      if (text[i] == ' ' ||
+          text[i] == '\n' ||
+          text[i] == '\t' ||
+          text[i] == '\r') {
         if (start >= 0) {
           ranges.add(_WordRange(start, i));
           start = -1;
@@ -1045,7 +1087,8 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     final chunkEnd = _ttsChunkIndex < _ttsChunkEnds.length
         ? _ttsChunkEnds[_ttsChunkIndex]
         : _ttsWords.last.end;
-    final chunkStart = _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
+    final chunkStart =
+        _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
         ? _ttsChunkEnds[_ttsChunkIndex - 1]
         : 0;
     final chunkLength = chunkEnd - chunkStart;
@@ -1072,7 +1115,8 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
         laoCount++;
       } else if (rune >= 0x0E00 && rune <= 0x0E7F) {
         thaiCount++;
-      } else if ((rune >= 0x41 && rune <= 0x5A) || (rune >= 0x61 && rune <= 0x7A)) {
+      } else if ((rune >= 0x41 && rune <= 0x5A) ||
+          (rune >= 0x61 && rune <= 0x7A)) {
         engCount++;
       }
     }
@@ -1153,8 +1197,6 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     }
     final chunks = _chunkText(content);
     if (chunks.isEmpty) return;
-    _ttsChunks = chunks;
-
     // Reconstruct original end positions (reverse .trim() from _chunkText)
     _ttsChunkEnds = [];
     int pos = 0;
@@ -1206,9 +1248,15 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     });
 
     File? file = await _fetchTtsChunk(0, chunks[0]);
-    if (file == null || runId != _ttsRunId || !mounted || _audioMode != _AudioMode.tts) {
+    if (file == null ||
+        runId != _ttsRunId ||
+        !mounted ||
+        _audioMode != _AudioMode.tts) {
       if (mounted && _audioMode == _AudioMode.tts) {
-        setState(() { _audioMode = _AudioMode.none; _isLoadingAudio = false; });
+        setState(() {
+          _audioMode = _AudioMode.none;
+          _isLoadingAudio = false;
+        });
       }
       return;
     }
@@ -1219,7 +1267,9 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     await _player.setSpeed(0.85);
     await _player.play();
     _ttsChunkBytes.add(await file.readAsBytes());
-    try { await file.delete(); } catch (_) {}
+    try {
+      await file.delete();
+    } catch (_) {}
 
     for (int i = 1; i < chunks.length; i++) {
       if (runId != _ttsRunId || !mounted || _audioMode != _AudioMode.tts) break;
@@ -1228,7 +1278,8 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
 
       try {
         final state = _player.processingState;
-        if (state != ProcessingState.completed && state != ProcessingState.idle) {
+        if (state != ProcessingState.completed &&
+            state != ProcessingState.idle) {
           await _player.processingStateStream.firstWhere(
             (s) => s == ProcessingState.completed || s == ProcessingState.idle,
           );
@@ -1241,9 +1292,9 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
       File? file = await prefetch;
       if (file == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('TTS error')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('TTS error')));
         }
         break;
       }
@@ -1253,13 +1304,16 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
       await _player.setSpeed(0.85);
       await _player.play();
       _ttsChunkBytes.add(await file.readAsBytes());
-      try { await file.delete(); } catch (_) {}
+      try {
+        await file.delete();
+      } catch (_) {}
     }
 
     if (mounted && runId == _ttsRunId && _audioMode == _AudioMode.tts) {
       try {
         final state = _player.processingState;
-        if (state != ProcessingState.completed && state != ProcessingState.idle) {
+        if (state != ProcessingState.completed &&
+            state != ProcessingState.idle) {
           await _player.processingStateStream.firstWhere(
             (s) => s == ProcessingState.completed || s == ProcessingState.idle,
           );
@@ -1280,10 +1334,10 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     if (_ttsChunkBytes.isEmpty) return;
     try {
       final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/${widget.slug}_page$_currentPage.mp3',
+      final file = File('${dir.path}/${widget.slug}_page$_currentPage.mp3');
+      final allBytes = Uint8List(
+        _ttsChunkBytes.fold(0, (sum, b) => sum + b.length),
       );
-      final allBytes = Uint8List(_ttsChunkBytes.fold(0, (sum, b) => sum + b.length));
       int offset = 0;
       for (final chunk in _ttsChunkBytes) {
         allBytes.setRange(offset, offset + chunk.length, chunk);
@@ -1291,15 +1345,15 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
       }
       await file.writeAsBytes(allBytes);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved: ${file.path}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Saved: ${file.path}')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error saving: $e')));
       }
     }
   }
@@ -1361,9 +1415,9 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     Navigator.pop(context);
 
     if (results.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ບໍ່ພົບຜົນການຄົ້ນຫາ')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ບໍ່ພົບຜົນການຄົ້ນຫາ')));
       return;
     }
 
@@ -1384,7 +1438,10 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
               padding: const EdgeInsets.all(16),
               child: Text(
                 'ພົບ ${results.length} ໜ້າ',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const Divider(height: 1),

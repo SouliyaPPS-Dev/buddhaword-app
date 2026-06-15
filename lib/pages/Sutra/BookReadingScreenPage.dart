@@ -72,7 +72,6 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
   int _ttsRunId = 0;
   List<_WordRange> _ttsWords = [];
   int _ttsCurrentWordIndex = -1;
-  List<String> _ttsChunks = [];
   int _ttsChunkIndex = 0;
   List<int> _ttsChunkEnds = [];
 
@@ -802,7 +801,9 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
                                       ), // Add horizontal padding to center the text
                                       child: SelectableText.rich(
                                         _isTtsSpeaking && _ttsWords.isNotEmpty
-                                            ? _buildTtsHighlightedSpan(snapshot.data!)
+                                            ? _buildTtsHighlightedSpan(
+                                                snapshot.data!,
+                                              )
                                             : TextSpan(
                                                 children: parseContent(
                                                   context,
@@ -919,7 +920,9 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
             child: FloatingActionButton(
               heroTag: 'fab5',
               onPressed: _speakContent,
-              backgroundColor: _isTtsSpeaking ? Colors.brown : const Color(0xFFF5F5F5),
+              backgroundColor: _isTtsSpeaking
+                  ? Colors.brown
+                  : const Color(0xFFF5F5F5),
               child: _isTtsLoading
                   ? SizedBox(
                       width: 20,
@@ -949,7 +952,8 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
         laoCount++;
       } else if (rune >= 0x0E00 && rune <= 0x0E7F) {
         thaiCount++;
-      } else if ((rune >= 0x41 && rune <= 0x5A) || (rune >= 0x61 && rune <= 0x7A)) {
+      } else if ((rune >= 0x41 && rune <= 0x5A) ||
+          (rune >= 0x61 && rune <= 0x7A)) {
         engCount++;
       }
     }
@@ -985,7 +989,10 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
     final ranges = <_WordRange>[];
     int start = -1;
     for (int i = 0; i < text.length; i++) {
-      if (text[i] == ' ' || text[i] == '\n' || text[i] == '\t' || text[i] == '\r') {
+      if (text[i] == ' ' ||
+          text[i] == '\n' ||
+          text[i] == '\t' ||
+          text[i] == '\r') {
         if (start >= 0) {
           ranges.add(_WordRange(start, i));
           start = -1;
@@ -1007,7 +1014,8 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
     final chunkEnd = _ttsChunkIndex < _ttsChunkEnds.length
         ? _ttsChunkEnds[_ttsChunkIndex]
         : _ttsWords.last.end;
-    final chunkStart = _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
+    final chunkStart =
+        _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
         ? _ttsChunkEnds[_ttsChunkIndex - 1]
         : 0;
     final chunkLength = chunkEnd - chunkStart;
@@ -1039,13 +1047,15 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
       }
       final wordText = clean.substring(r.start, r.end);
       final isCurrent = i == _ttsCurrentWordIndex;
-      spans.add(TextSpan(
-        text: wordText,
-        style: TextStyle(
-          backgroundColor: isCurrent ? Colors.yellow : null,
-          fontWeight: isCurrent ? FontWeight.bold : null,
+      spans.add(
+        TextSpan(
+          text: wordText,
+          style: TextStyle(
+            backgroundColor: isCurrent ? Colors.yellow : null,
+            fontWeight: isCurrent ? FontWeight.bold : null,
+          ),
         ),
-      ));
+      );
       lastEnd = r.end;
     }
     if (lastEnd < clean.length) {
@@ -1088,7 +1098,6 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
           _isTtsLoading = false;
           _ttsWords = [];
           _ttsCurrentWordIndex = -1;
-          _ttsChunks = [];
           _ttsChunkIndex = 0;
           _ttsChunkEnds = [];
         });
@@ -1104,8 +1113,6 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
 
     final chunks = _chunkText(content);
     if (chunks.isEmpty) return;
-    _ttsChunks = chunks;
-
     // Reconstruct original end positions (reverse .trim() from _chunkText)
     _ttsChunkEnds = [];
     int pos = 0;
@@ -1196,8 +1203,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
         if (state != ProcessingState.completed &&
             state != ProcessingState.idle) {
           await _player.processingStateStream.firstWhere(
-            (s) =>
-                s == ProcessingState.completed || s == ProcessingState.idle,
+            (s) => s == ProcessingState.completed || s == ProcessingState.idle,
           );
         }
       } catch (_) {
@@ -1226,8 +1232,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
         if (state != ProcessingState.completed &&
             state != ProcessingState.idle) {
           await _player.processingStateStream.firstWhere(
-            (s) =>
-                s == ProcessingState.completed || s == ProcessingState.idle,
+            (s) => s == ProcessingState.completed || s == ProcessingState.idle,
           );
         }
       } catch (_) {}

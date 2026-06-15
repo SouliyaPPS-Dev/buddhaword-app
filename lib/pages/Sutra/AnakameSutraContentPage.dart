@@ -211,12 +211,11 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
         .replaceAll(RegExp(r'</p>'), '\n')
         .replaceAll(RegExp(r'<[^>]*>'), '')
         .replaceAll(RegExp(r'\u00A0'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
         .trim();
 
     final lines = text
         .split('\n')
-        .expand((line) => line.split('.'))
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty && line.length >= 4)
         .toList();

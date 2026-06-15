@@ -186,10 +186,26 @@ class _UttayarndhamContentPageState
   }
 
   String _extractContent(String html) {
-    final nodeStart = html.indexOf('node__content');
-    if (nodeStart < 0) return html;
-    final divStart = html.lastIndexOf('<div', nodeStart);
-    if (divStart < 0) return html;
+    // Try field--name-body first (main article body in Drupal)
+    const bodyClass = 'field--name-body';
+    final bodyIdx = html.indexOf(bodyClass);
+    if (bodyIdx >= 0) {
+      final target = _extractDiv(html, bodyIdx);
+      if (target != null) return target;
+    }
+    // Fall back to node__content
+    const nodeClass = 'node__content';
+    final nodeIdx = html.indexOf(nodeClass);
+    if (nodeIdx >= 0) {
+      final target = _extractDiv(html, nodeIdx);
+      if (target != null) return target;
+    }
+    return html;
+  }
+
+  String? _extractDiv(String html, int classPos) {
+    final divStart = html.lastIndexOf('<div', classPos);
+    if (divStart < 0) return null;
     int depth = 0;
     int endPos = divStart;
     for (int i = divStart; i < html.length; i++) {
@@ -217,11 +233,10 @@ class _UttayarndhamContentPageState
         .replaceAll(RegExp(r'</p>'), '\n')
         .replaceAll(RegExp(r'<[^>]*>'), '')
         .replaceAll(RegExp(r'\u00A0'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
         .trim();
 
     final lines = text.split('\n')
-        .expand((line) => line.split('.'))
         .map((line) => line.trim())
         .where((line) => line.isNotEmpty && line.length >= 4)
         .toList();
