@@ -367,6 +367,14 @@ class _SearchPageState extends State<SearchPage> {
 
   void _runSearch(String searchTerm, String selectedCategory) {
     _debounceTimer?.cancel();
+    if (searchTerm.trim().isEmpty) {
+      setState(() {
+        _filteredData = [];
+        _externalResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
     if (_selectedSource == 'main' || _selectedSource == 'all') {
       updateData(searchTerm, selectedCategory);
     }
@@ -382,6 +390,10 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   void updateData(String searchTerm, String selectedCategory) {
+    if (searchTerm.trim().isEmpty) {
+      setState(() => _filteredData = []);
+      return;
+    }
     _filteredData = _data
         .where((row) {
           return row.any(
@@ -612,23 +624,30 @@ class _SearchPageState extends State<SearchPage> {
   TextSpan highlightSearchTerm(
     BuildContext context,
     String text,
-    String searchTerm,
-  ) {
+    String searchTerm, {
+    TextStyle? baseStyle,
+    double highlightFontSize = 17,
+    Color highlightColor = const Color(0xFFFFD700),
+    Color highlightTextColor = Colors.black,
+  }) {
     final theme = Theme.of(context);
-    final textColor = theme.textTheme.bodyLarge?.color;
-
-    if (searchTerm.isEmpty) {
-      return TextSpan(
-        text: text,
-        style: theme.textTheme.bodyLarge?.copyWith(
-          fontSize: 17,
+    final textColor = baseStyle?.color ?? theme.textTheme.bodyLarge?.color;
+    final effectiveStyle =
+        baseStyle ??
+        theme.textTheme.bodyLarge?.copyWith(
+          fontSize: highlightFontSize,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.5,
-        ),
-      );
+        );
+
+    if (searchTerm.isEmpty) {
+      return TextSpan(text: text, style: effectiveStyle);
     }
 
-    final RegExp regex = RegExp(searchTerm, caseSensitive: false);
+    final RegExp regex = RegExp(
+      RegExp.escape(searchTerm),
+      caseSensitive: false,
+    );
     final List<TextSpan> spans = [];
     int lastIndex = 0;
 
@@ -636,26 +655,14 @@ class _SearchPageState extends State<SearchPage> {
       final String beforeMatch = text.substring(lastIndex, match.start);
       final String matchedText = text.substring(match.start, match.end);
 
-      spans.add(
-        TextSpan(
-          text: beforeMatch,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
-          ),
-        ),
-      );
+      spans.add(TextSpan(text: beforeMatch, style: effectiveStyle));
 
       spans.add(
         TextSpan(
           text: matchedText,
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
-            color: Colors.black,
-            backgroundColor: Color(0xFFFFD700),
+          style: effectiveStyle?.copyWith(
+            color: highlightTextColor,
+            backgroundColor: highlightColor,
           ),
         ),
       );
@@ -666,12 +673,7 @@ class _SearchPageState extends State<SearchPage> {
     spans.add(
       TextSpan(
         text: text.substring(lastIndex),
-        style: theme.textTheme.bodyLarge?.copyWith(
-          fontSize: 17,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-          color: textColor,
-        ),
+        style: effectiveStyle?.copyWith(color: textColor),
       ),
     );
 
@@ -973,6 +975,21 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildMainResults() {
+    if (_filteredData.isEmpty && _searchTerm.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'ກະລຸນາປ້ອນຂໍ້ຄວາມເພື່ອຄົ້ນຫາ',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
     return ListView.builder(
       itemCount: _filteredData.length,
       itemBuilder: (context, index) => _buildMainResultCard(index),
@@ -984,11 +1001,19 @@ class _SearchPageState extends State<SearchPage> {
     final title = rowData.length > 1 ? rowData[1].toString() : '';
     final audio = rowData.length > 5 ? rowData[5].toString() : '/';
 
+    final hasSearchTerm = _searchTerm.isNotEmpty;
     return Card(
-      elevation: 8,
+      elevation: hasSearchTerm ? 12 : 8,
       margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.0)),
-      shadowColor: Color.fromARGB(255, 91, 50, 35).withOpacity(0.9),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15.0),
+        side: hasSearchTerm
+            ? BorderSide(color: Colors.brown.withOpacity(0.5), width: 2.5)
+            : BorderSide.none,
+      ),
+      shadowColor: hasSearchTerm
+          ? Color(0xFFFFD700).withOpacity(0.5)
+          : Color.fromARGB(255, 91, 50, 35).withOpacity(0.9),
       child: Container(
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(15.0)),
         child: ListTile(
@@ -1230,6 +1255,22 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Widget _buildExternalResults() {
+    if (_searchTerm.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'ກະລຸນາປ້ອນຂໍ້ຄວາມເພື່ອຄົ້ນຫາ',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (_isSearching) {
       return const Center(
         child: Column(
@@ -1272,10 +1313,16 @@ class _SearchPageState extends State<SearchPage> {
     final title = result['title'] as String;
     final subtitle = result['subtitle'] as String? ?? '';
 
+    final hasSearchTerm = _searchTerm.isNotEmpty;
     return Card(
-      elevation: 4,
+      elevation: hasSearchTerm ? 6 : 4,
       margin: EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        side: hasSearchTerm
+            ? BorderSide(color: Colors.brown.withOpacity(0.5), width: 2)
+            : BorderSide.none,
+      ),
       child: ListTile(
         leading: CircleAvatar(
           radius: 18,
@@ -1289,12 +1336,18 @@ class _SearchPageState extends State<SearchPage> {
         title: Row(
           children: [
             Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
+              child: RichText(
+                text: highlightSearchTerm(
+                  context,
+                  title,
+                  _searchTerm,
+                  baseStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             Container(
@@ -1315,11 +1368,16 @@ class _SearchPageState extends State<SearchPage> {
           ],
         ),
         subtitle: subtitle.isNotEmpty
-            ? Text(
-                subtitle,
+            ? RichText(
+                text: highlightSearchTerm(
+                  context,
+                  subtitle,
+                  _searchTerm,
+                  baseStyle: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  highlightFontSize: 13,
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
               )
             : null,
         onTap: () {
