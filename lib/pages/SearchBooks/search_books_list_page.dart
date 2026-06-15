@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
@@ -22,6 +23,7 @@ class _SearchBooksListPageState extends State<SearchBooksListPage> {
   List<GlobalSearchResult> _globalResults = [];
   bool _isSearching = false;
   Timer? _debounce;
+  StreamSubscription? _connectivitySub;
 
   @override
   void initState() {
@@ -30,6 +32,11 @@ class _SearchBooksListPageState extends State<SearchBooksListPage> {
       context.read<SearchBooksProvider>().fetchBooks();
     });
     _searchController.addListener(_onSearchChanged);
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      if (!results.contains(ConnectivityResult.none) && mounted) {
+        context.read<SearchBooksProvider>().fetchBooks(forceRefresh: true);
+      }
+    });
   }
 
   @override
@@ -38,6 +45,7 @@ class _SearchBooksListPageState extends State<SearchBooksListPage> {
     _searchController.dispose();
     _searchFocus.dispose();
     _debounce?.cancel();
+    _connectivitySub?.cancel();
     super.dispose();
   }
 
@@ -88,6 +96,37 @@ class _SearchBooksListPageState extends State<SearchBooksListPage> {
           ),
         ),
         actions: [
+          Consumer<SearchBooksProvider>(
+            builder: (context, provider, child) {
+              return provider.isLoading
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.refresh, color: Colors.white),
+                      tooltip: 'ອັບເດດຂໍ້ມູນ',
+                      onPressed: () {
+                        context.read<SearchBooksProvider>().fetchBooks(
+                          forceRefresh: true,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('ກຳລັງອັບເດດຂໍ້ມູນ...'),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                      },
+                    );
+            },
+          ),
           Consumer<ThemeProvider>(
             builder: (context, themeProvider, child) {
               return GestureDetector(

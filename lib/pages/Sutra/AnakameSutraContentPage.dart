@@ -118,7 +118,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Error: $e';
+          if (!_isOffline) _error = 'ການໂຫຼດຂໍ້ມູນລົ້ມເຫຼວ (ກະລຸນາກວດສອບການເຊື່ອມຕໍ່)';
           _isLoading = false;
         });
       }

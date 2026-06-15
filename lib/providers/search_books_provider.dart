@@ -251,8 +251,6 @@ class SearchBooksProvider with ChangeNotifier {
   }
 
   Future<List<BookSummary>> fetchBooks({bool forceRefresh = false}) async {
-    if (_books.isNotEmpty && !forceRefresh) return _books;
-
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -271,6 +269,7 @@ class SearchBooksProvider with ChangeNotifier {
               .map((e) => BookSummary.fromJson(e as Map<String, dynamic>))
               .toList();
           await prefs.setString('searchBooks_list', json.encode(_books.map((e) => e.toJson()).toList()));
+          await _ensureSlugIndex();
           _isLoading = false;
           _error = null;
           notifyListeners();
@@ -281,10 +280,17 @@ class SearchBooksProvider with ChangeNotifier {
       }
     }
 
+    if (_books.isNotEmpty && !forceRefresh) {
+      _isLoading = false;
+      notifyListeners();
+      return _books;
+    }
+
     if (cached != null && cached.isNotEmpty) {
       _books = (json.decode(cached) as List)
           .map((e) => BookSummary.fromJson(e as Map<String, dynamic>))
           .toList();
+      await _ensureSlugIndex();
       _isLoading = false;
       notifyListeners();
       return _books;
@@ -300,6 +306,19 @@ class SearchBooksProvider with ChangeNotifier {
     _isLoading = false;
     notifyListeners();
     return _books;
+  }
+
+  Future<void> _ensureSlugIndex() async {
+    if (_slugToIndex.isNotEmpty) return;
+    try {
+      final manifestJson = await rootBundle.loadString(
+        'assets/search_books/books.json',
+      );
+      final list = json.decode(manifestJson) as List;
+      for (int i = 0; i < list.length; i++) {
+        _slugToIndex[list[i]['slug']] = i;
+      }
+    } catch (_) {}
   }
 
   Future<BookDetail?> fetchBookDetail(String slug) async {
@@ -454,6 +473,8 @@ class SearchBooksProvider with ChangeNotifier {
       }
       slugs = slugToTitle.keys.toList();
     }
+
+    await _ensureSlugIndex();
 
     if (slugs.isEmpty) return [];
 
