@@ -14,6 +14,7 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart' as yt;
 
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
+import '../SearchBooks/search_books_reader_page.dart';
 import 'BookReadingScreenPage.dart';
 import 'DetailPage.dart';
 import 'SearchPage.dart';
@@ -90,20 +91,14 @@ class _FavoritePageState extends State<FavoritePage> {
       _searchTerm = query;
       _filteredFavorites = _favorites.where((favorite) {
         final itemData = jsonDecode(favorite);
-        final id = itemData['id'].toLowerCase();
-        final title = itemData['title'].toLowerCase();
-        final detail = itemData['details'].toLowerCase(); // Get details
-        final category = itemData['category'].toLowerCase(); // Get category
+        final id = (itemData['id'] ?? '').toString().toLowerCase();
+        final title = (itemData['title'] ?? '').toString().toLowerCase();
+        final detail = (itemData['details'] ?? '').toString().toLowerCase();
+        final category = (itemData['category'] ?? '').toString().toLowerCase();
         return id.contains(query.toLowerCase()) ||
-            title.contains(
-              query.toLowerCase(),
-            ) || // Check if title contains query
-            detail.contains(
-              query.toLowerCase(),
-            ) || // Check if detail contains query
-            category.contains(
-              query.toLowerCase(),
-            ); // Check if category contains query
+            title.contains(query.toLowerCase()) ||
+            detail.contains(query.toLowerCase()) ||
+            category.contains(query.toLowerCase());
       }).toList();
     });
   }
@@ -851,23 +846,39 @@ class _FavoritePageState extends State<FavoritePage> {
                                     )
                                   : null,
                               onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => DetailPage(
-                                      items: _filteredFavorites
-                                          .map(
-                                            (e) =>
-                                                json.decode(e)
-                                                    as Map<String, dynamic>,
-                                          )
-                                          .toList(),
-                                      initialIndex: index,
-                                      searchTerm: _searchTerm,
-                                      onFavoriteChanged: _loadFavorites,
+                                final itemData = json.decode(
+                                  _filteredFavorites[index],
+                                ) as Map<String, dynamic>;
+                                if (itemData['type'] == 'book') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => SearchBooksReaderPage(
+                                        slug: itemData['slug'] ?? '',
+                                        title: itemData['title'] ?? '',
+                                        totalPages: itemData['totalPages'] ?? 0,
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                } else {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => DetailPage(
+                                        items: _filteredFavorites
+                                            .map(
+                                              (e) =>
+                                                  json.decode(e)
+                                                      as Map<String, dynamic>,
+                                            )
+                                            .toList(),
+                                        initialIndex: index,
+                                        searchTerm: _searchTerm,
+                                        onFavoriteChanged: _loadFavorites,
+                                      ),
+                                    ),
+                                  );
+                                }
                               },
                             ),
                           ),
@@ -882,12 +893,16 @@ class _FavoritePageState extends State<FavoritePage> {
           ? FloatingActionButton(
               heroTag: null,
               onPressed: () {
-                // Implement your action here, e.g., navigate to book reading screen
+                final sutraFavorites = _filteredFavorites.where((fav) {
+                  final data = jsonDecode(fav) as Map<String, dynamic>;
+                  return data['type'] != 'book';
+                }).toList();
+                if (sutraFavorites.isEmpty) return;
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => BookReadingScreenPage(
-                      filteredData: _filteredFavorites.map((fav) {
+                      filteredData: sutraFavorites.map((fav) {
                         return [
                           jsonDecode(fav)['id'],
                           jsonDecode(fav)['title'],

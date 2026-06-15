@@ -63,6 +63,12 @@ enum _AudioMode { none, tts }
 
 enum BookTheme { light, sepia, dark }
 
+class _WordRange {
+  final int start;
+  final int end;
+  _WordRange(this.start, this.end);
+}
+
 class SearchBooksReaderPage extends StatefulWidget {
   final String slug;
   final String title;
@@ -108,6 +114,10 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   int _ttsRunId = 0;
   double _fontSize = 18.0;
   BookTheme _bookTheme = BookTheme.sepia;
+  bool _isFullScreen = false;
+  bool _isFavorited = false;
+  List<_WordRange> _ttsWords = [];
+  int _ttsCurrentWordIndex = -1;
 
   @override
   void initState() {
@@ -119,6 +129,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     _loadPage(_currentPage);
     _loadTheme();
     _loadFontSize();
+    _loadFavoriteState();
   }
 
   Future<void> _loadTheme() async {
@@ -143,6 +154,38 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   Future<void> _saveFontSize(double size) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('fontSize', size);
+  }
+
+  Future<void> _loadFavoriteState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final favorites = prefs.getStringList('favorites') ?? [];
+    if (!mounted) return;
+    setState(() {
+      _isFavorited = favorites.any((fav) {
+        final data = json.decode(fav) as Map<String, dynamic>;
+        return data['type'] == 'book' && data['slug'] == widget.slug;
+      });
+    });
+  }
+
+  Future<void> _toggleFavorite() async {
+    final prefs = await SharedPreferences.getInstance();
+    final favorites = List<String>.from(prefs.getStringList('favorites') ?? []);
+    setState(() => _isFavorited = !_isFavorited);
+    if (_isFavorited) {
+      favorites.add(json.encode({
+        'type': 'book',
+        'slug': widget.slug,
+        'title': widget.title,
+        'totalPages': _totalPages,
+      }));
+    } else {
+      favorites.removeWhere((fav) {
+        final data = json.decode(fav) as Map<String, dynamic>;
+        return data['type'] == 'book' && data['slug'] == widget.slug;
+      });
+    }
+    await prefs.setStringList('favorites', favorites);
   }
 
   void _cycleTheme() {
@@ -225,18 +268,34 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bgColor,
-      appBar: AppBar(
-        backgroundColor: Colors.brown,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: _buildTitle(),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.white),
-            onPressed: () => _showSearchInBookDialog(context),
-          ),
+      appBar: _isFullScreen
+          ? PreferredSize(
+              preferredSize: Size.zero,
+              child: const SizedBox.shrink(),
+            )
+          : AppBar(
+              backgroundColor: Colors.brown,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
+              title: _buildTitle(),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.fullscreen, color: Colors.white),
+                  onPressed: () => setState(() => _isFullScreen = true),
+                ),
+                IconButton(
+                  icon: Icon(
+                    _isFavorited ? Icons.favorite : Icons.favorite_border,
+                    color: Colors.white,
+                  ),
+                  onPressed: _toggleFavorite,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.search, color: Colors.white),
+                  onPressed: () => _showSearchInBookDialog(context),
+                ),
           IconButton(
             icon: const Icon(Icons.text_increase, color: Colors.white),
             onPressed: _increaseFontSize,
@@ -340,7 +399,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
               _buildTtsBar(),
             ],
           ),
-          if (_currentPage > 1)
+          if (!_isFullScreen && _currentPage > 1)
             Positioned(
               left: 0,
               top: 0,
@@ -358,7 +417,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                 ),
               ),
             ),
-          if (_currentPage < _totalPages)
+          if (!_isFullScreen && _currentPage < _totalPages)
             Positioned(
               right: 0,
               top: 0,
@@ -376,14 +435,37 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                 ),
               ),
             ),
-          Positioned(
-            bottom: 100,
-            right: 16,
-            child: _buildVolumeFab(),
-          ),
+          if (_isFullScreen)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              right: 12,
+              child: GestureDetector(
+                onTap: () => setState(() => _isFullScreen = false),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Colors.black26,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.fullscreen_exit,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+              ),
+            ),
+          if (!_isFullScreen)
+            Positioned(
+              bottom: 100,
+              right: 16,
+              child: _buildVolumeFab(),
+            ),
         ],
       ),
-      bottomNavigationBar: Container(
+      bottomNavigationBar: _isFullScreen
+          ? null
+          : Container(
         color: Colors.brown,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
@@ -497,6 +579,10 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
 
     if (isToc) {
       return _buildTocContent(text, query);
+    }
+
+    if (_audioMode == _AudioMode.tts && _ttsWords.isNotEmpty) {
+      return _buildTtsHighlightedText(text, query);
     }
 
     if (query == null || query.isEmpty) {
@@ -616,6 +702,45 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildTtsHighlightedText(String text, String? query) {
+    final spans = <TextSpan>[];
+    int wordIndex = 0;
+    int lastEnd = 0;
+
+    for (int i = 0; i < _ttsWords.length; i++) {
+      final r = _ttsWords[i];
+      if (r.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, r.start)));
+      }
+      final wordText = text.substring(r.start, r.end);
+      final isCurrent = wordIndex == _ttsCurrentWordIndex;
+      spans.add(TextSpan(
+        text: wordText,
+        style: TextStyle(
+          backgroundColor: isCurrent ? Colors.yellow : null,
+          fontWeight: isCurrent ? FontWeight.bold : null,
+        ),
+      ));
+      lastEnd = r.end;
+      wordIndex++;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+
+    return SelectableText.rich(
+      TextSpan(
+        style: TextStyle(
+          fontSize: _fontSize,
+          height: 1.6,
+          fontFamily: 'NotoSerifLao',
+          color: _textColor,
+        ),
+        children: spans,
+      ),
     );
   }
 
@@ -877,6 +1002,8 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
       _position = Duration.zero;
       _duration = Duration.zero;
       _isLoadingAudio = false;
+      _ttsWords = [];
+      _ttsCurrentWordIndex = -1;
     });
   }
 
@@ -884,6 +1011,42 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '${d.inHours > 0 ? '${d.inHours}:' : ''}$m:$s';
+  }
+
+  List<_WordRange> _buildWordRanges(String text) {
+    final ranges = <_WordRange>[];
+    int start = -1;
+    for (int i = 0; i < text.length; i++) {
+      if (text[i] == ' ' || text[i] == '\n' || text[i] == '\t' || text[i] == '\r') {
+        if (start >= 0) {
+          ranges.add(_WordRange(start, i));
+          start = -1;
+        }
+      } else {
+        if (start < 0) start = i;
+      }
+    }
+    if (start >= 0) {
+      ranges.add(_WordRange(start, text.length));
+    }
+    return ranges;
+  }
+
+  void _updateTtsWordIndex() {
+    if (_ttsWords.isEmpty || _duration.inMilliseconds <= 0) return;
+    final progress = _position.inMilliseconds / _duration.inMilliseconds;
+    final totalChars = _ttsWords.isNotEmpty ? _ttsWords.last.end : 0;
+    final charIndex = (progress * totalChars).round();
+    int newIndex = -1;
+    for (int i = 0; i < _ttsWords.length; i++) {
+      if (charIndex >= _ttsWords[i].start && charIndex < _ttsWords[i].end) {
+        newIndex = i;
+        break;
+      }
+    }
+    if (newIndex != _ttsCurrentWordIndex) {
+      _ttsCurrentWordIndex = newIndex;
+    }
   }
 
   String _detectLanguage(String text) {
@@ -975,6 +1138,9 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     final chunks = _chunkText(content);
     if (chunks.isEmpty) return;
 
+    _ttsWords = _buildWordRanges(content);
+    _ttsCurrentWordIndex = -1;
+
     _ttsRunId++;
     final runId = _ttsRunId;
     _ttsChunkBytes.clear();
@@ -1001,7 +1167,12 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
       if (mounted) setState(() => _duration = duration ?? Duration.zero);
     });
     _positionSubscription = _player.positionStream.listen((position) {
-      if (mounted) setState(() => _position = position);
+      if (mounted) {
+        setState(() {
+          _position = position;
+          _updateTtsWordIndex();
+        });
+      }
     });
 
     File? file = await _fetchTtsChunk(0, chunks[0]);

@@ -70,6 +70,8 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
   bool _isTtsLoading = false;
   final List<Uint8List> _ttsChunkBytes = [];
   int _ttsRunId = 0;
+  List<_WordRange> _ttsWords = [];
+  int _ttsCurrentWordIndex = -1;
 
   // check if the current theme is dark or not
   bool? isDarkMode;
@@ -796,14 +798,16 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
                                         horizontal: isMobile ? 0 : paddingValue,
                                       ), // Add horizontal padding to center the text
                                       child: SelectableText.rich(
-                                        TextSpan(
-                                          children: parseContent(
-                                            context,
-                                            snapshot.data!,
-                                            _fontSize,
-                                            isDarkMode == true,
-                                          ),
-                                        ),
+                                        _isTtsSpeaking && _ttsWords.isNotEmpty
+                                            ? _buildTtsHighlightedSpan(snapshot.data!)
+                                            : TextSpan(
+                                                children: parseContent(
+                                                  context,
+                                                  snapshot.data!,
+                                                  _fontSize,
+                                                  isDarkMode == true,
+                                                ),
+                                              ),
                                         toolbarOptions: const ToolbarOptions(
                                           copy: true,
                                           cut: true,
@@ -974,6 +978,68 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
     return chunks.where((c) => c.isNotEmpty).toList();
   }
 
+  List<_WordRange> _buildWordRanges(String text) {
+    final ranges = <_WordRange>[];
+    int start = -1;
+    for (int i = 0; i < text.length; i++) {
+      if (text[i] == ' ' || text[i] == '\n' || text[i] == '\t' || text[i] == '\r') {
+        if (start >= 0) {
+          ranges.add(_WordRange(start, i));
+          start = -1;
+        }
+      } else {
+        if (start < 0) start = i;
+      }
+    }
+    if (start >= 0) {
+      ranges.add(_WordRange(start, text.length));
+    }
+    return ranges;
+  }
+
+  void _updateTtsWordIndex() {
+    if (_ttsWords.isEmpty || _duration.inMilliseconds <= 0) return;
+    final progress = _position.inMilliseconds / _duration.inMilliseconds;
+    final totalChars = _ttsWords.isNotEmpty ? _ttsWords.last.end : 0;
+    final charIndex = (progress * totalChars).round();
+    int newIndex = -1;
+    for (int i = 0; i < _ttsWords.length; i++) {
+      if (charIndex >= _ttsWords[i].start && charIndex < _ttsWords[i].end) {
+        newIndex = i;
+        break;
+      }
+    }
+    if (newIndex != _ttsCurrentWordIndex) {
+      _ttsCurrentWordIndex = newIndex;
+    }
+  }
+
+  TextSpan _buildTtsHighlightedSpan(String text) {
+    final clean = text.replaceAll(RegExp(r'<\/?b>'), '');
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+    for (int i = 0; i < _ttsWords.length; i++) {
+      final r = _ttsWords[i];
+      if (r.start > lastEnd) {
+        spans.add(TextSpan(text: clean.substring(lastEnd, r.start)));
+      }
+      final wordText = clean.substring(r.start, r.end);
+      final isCurrent = i == _ttsCurrentWordIndex;
+      spans.add(TextSpan(
+        text: wordText,
+        style: TextStyle(
+          backgroundColor: isCurrent ? Colors.yellow : null,
+          fontWeight: isCurrent ? FontWeight.bold : null,
+        ),
+      ));
+      lastEnd = r.end;
+    }
+    if (lastEnd < clean.length) {
+      spans.add(TextSpan(text: clean.substring(lastEnd)));
+    }
+    return TextSpan(children: spans);
+  }
+
   Future<File?> _fetchTtsChunk(int index, String text) async {
     try {
       final lang = _detectLanguage(text);
@@ -1006,6 +1072,8 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
         setState(() {
           _isTtsSpeaking = false;
           _isTtsLoading = false;
+          _ttsWords = [];
+          _ttsCurrentWordIndex = -1;
         });
       }
       return;
@@ -1019,6 +1087,9 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
 
     final chunks = _chunkText(content);
     if (chunks.isEmpty) return;
+
+    _ttsWords = _buildWordRanges(content);
+    _ttsCurrentWordIndex = -1;
 
     _ttsRunId++;
     final runId = _ttsRunId;
@@ -1050,7 +1121,12 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
       if (mounted) setState(() => _duration = duration ?? Duration.zero);
     });
     _positionSubscription = _player.positionStream.listen((position) {
-      if (mounted) setState(() => _position = position);
+      if (mounted) {
+        setState(() {
+          _position = position;
+          _updateTtsWordIndex();
+        });
+      }
     });
 
     // Fetch and play first chunk
@@ -1186,4 +1262,10 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
 
     _saveFontSizeToSharedPreferences(_fontSize);
   }
+}
+
+class _WordRange {
+  final int start;
+  final int end;
+  _WordRange(this.start, this.end);
 }

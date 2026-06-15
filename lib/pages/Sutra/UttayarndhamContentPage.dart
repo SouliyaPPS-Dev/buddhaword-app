@@ -68,6 +68,9 @@ class _UttayarndhamContentPageState
   File? _nextPrefetchedFile;
   int _ttsRunId = 0;
   double _fontSize = 18.0;
+  List<_WordRange> _ttsWords = [];
+  int _ttsCurrentWordIndex = -1;
+  List<int> _ttsParagraphOffsets = [];
   final Map<int, String> _contentCache = {};
   late PageController _pageController;
 
@@ -384,7 +387,12 @@ class _UttayarndhamContentPageState
       if (mounted) setState(() { _duration = duration ?? Duration.zero; });
     });
     _positionSubscription = _player.positionStream.listen((position) {
-      if (mounted) setState(() { _position = position; });
+      if (mounted) {
+        setState(() {
+          _position = position;
+          _updateTtsWordIndex();
+        });
+      }
     });
   }
 
@@ -427,14 +435,25 @@ class _UttayarndhamContentPageState
       return;
     }
 
-    final text = _extractPlainText(_htmlContent!);
-    if (text.length > _maxTtsChars) return;
+    final paragraphs = _extractParagraphs(_htmlContent!);
+    if (paragraphs.isEmpty) return;
+    final ttsText = paragraphs.join('\n');
+    if (ttsText.length > _maxTtsChars) return;
+
+    _ttsWords = _buildWordRanges(ttsText);
+    _ttsCurrentWordIndex = -1;
+    _ttsParagraphOffsets = [];
+    int offset = 0;
+    for (final p in paragraphs) {
+      _ttsParagraphOffsets.add(offset);
+      offset += p.length + 1;
+    }
 
     _ttsRunId++;
     final runId = _ttsRunId;
     _ttsChunkBytes.clear();
     _nextPrefetchedFile = null;
-    _ttsChunks = _chunkText(text);
+    _ttsChunks = _chunkText(ttsText);
 
     if (_ttsChunks.isEmpty) return;
     _ttsChunkIndex = 0;
@@ -472,7 +491,13 @@ class _UttayarndhamContentPageState
     _ttsChunkBytes.clear();
     _nextPrefetchedFile = null;
     _player.stop();
-    setState(() { _isPlaying = false; _isTtsLoading = false; });
+    setState(() {
+      _isPlaying = false;
+      _isTtsLoading = false;
+      _ttsWords = [];
+      _ttsCurrentWordIndex = -1;
+      _ttsParagraphOffsets = [];
+    });
   }
 
   Future<void> _downloadAudio() async {
@@ -744,23 +769,99 @@ class _UttayarndhamContentPageState
     return const Center(child: CircularProgressIndicator());
   }
 
+  List<_WordRange> _buildWordRanges(String text) {
+    final ranges = <_WordRange>[];
+    int start = -1;
+    for (int i = 0; i < text.length; i++) {
+      if (text[i] == ' ' || text[i] == '\n' || text[i] == '\t' || text[i] == '\r') {
+        if (start >= 0) {
+          ranges.add(_WordRange(start, i));
+          start = -1;
+        }
+      } else {
+        if (start < 0) start = i;
+      }
+    }
+    if (start >= 0) {
+      ranges.add(_WordRange(start, text.length));
+    }
+    return ranges;
+  }
+
+  void _updateTtsWordIndex() {
+    if (_ttsWords.isEmpty || _duration.inMilliseconds <= 0) return;
+    final progress = _position.inMilliseconds / _duration.inMilliseconds;
+    final totalChars = _ttsWords.isNotEmpty ? _ttsWords.last.end : 0;
+    final charIndex = (progress * totalChars).round();
+    int newIndex = -1;
+    for (int i = 0; i < _ttsWords.length; i++) {
+      if (charIndex >= _ttsWords[i].start && charIndex < _ttsWords[i].end) {
+        newIndex = i;
+        break;
+      }
+    }
+    if (newIndex != _ttsCurrentWordIndex) {
+      _ttsCurrentWordIndex = newIndex;
+    }
+  }
+
+  Widget _buildTtsHighlightedParagraph(String text, int paragraphIndex) {
+    if (paragraphIndex >= _ttsParagraphOffsets.length) {
+      return SelectableText.rich(TextSpan(text: text));
+    }
+    final offset = _ttsParagraphOffsets[paragraphIndex];
+    final spans = <TextSpan>[];
+    int lastEnd = 0;
+    for (int i = 0; i < _ttsWords.length; i++) {
+      final r = _ttsWords[i];
+      if (r.end <= offset) continue;
+      if (r.start >= offset + text.length) break;
+      final localStart = r.start - offset;
+      final localEnd = r.end - offset;
+      if (localStart > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, localStart)));
+      }
+      final wordText = text.substring(localStart, localEnd);
+      final isCurrent = i == _ttsCurrentWordIndex;
+      spans.add(TextSpan(
+        text: wordText,
+        style: TextStyle(
+          backgroundColor: isCurrent ? Colors.yellow : null,
+          fontWeight: isCurrent ? FontWeight.bold : null,
+        ),
+      ));
+      lastEnd = localEnd;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd)));
+    }
+    return SelectableText.rich(
+      TextSpan(children: spans),
+      showCursor: true,
+    );
+  }
+
   Widget _buildParagraphsView(List<String> paragraphs) {
     return ListView(
       padding: const EdgeInsets.all(16),
-      children: paragraphs.map((text) {
+      children: paragraphs.asMap().entries.map((entry) {
+        final i = entry.key;
+        final text = entry.value;
         final isHeading = text.length < 60;
         return Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 4),
-          child: SelectableText.rich(
-            _buildHighlightedSpan(text),
-            showCursor: true,
-            style: TextStyle(
-              fontSize: _fontSize,
-              fontWeight: isHeading ? FontWeight.bold : FontWeight.normal,
-              height: 1.6,
-              letterSpacing: 0.3,
-            ),
-          ),
+          child: _ttsActive && _ttsWords.isNotEmpty
+              ? _buildTtsHighlightedParagraph(text, i)
+              : SelectableText.rich(
+                  _buildHighlightedSpan(text),
+                  showCursor: true,
+                  style: TextStyle(
+                    fontSize: _fontSize,
+                    fontWeight: isHeading ? FontWeight.bold : FontWeight.normal,
+                    height: 1.6,
+                    letterSpacing: 0.3,
+                  ),
+                ),
         );
       }).toList(),
     );
@@ -918,4 +1019,10 @@ class _UttayarndhamContentPageState
     }
     return TextSpan(children: spans);
   }
+}
+
+class _WordRange {
+  final int start;
+  final int end;
+  _WordRange(this.start, this.end);
 }
