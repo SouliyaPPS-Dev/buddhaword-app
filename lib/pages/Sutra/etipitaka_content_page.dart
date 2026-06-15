@@ -533,6 +533,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
         text: wordText,
         style: TextStyle(
           backgroundColor: isCurrent ? Colors.yellow : null,
+          color: isCurrent && context.read<ThemeProvider>().isDarkMode ? Colors.black : null,
           fontWeight: isCurrent ? FontWeight.bold : null,
         ),
       ));

@@ -753,6 +753,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
           text: wordText,
           style: TextStyle(
             backgroundColor: isCurrent ? Colors.yellow : null,
+            color: isCurrent && _bookTheme == BookTheme.dark ? Colors.black : null,
             fontWeight: isCurrent ? FontWeight.bold : null,
           ),
         ),

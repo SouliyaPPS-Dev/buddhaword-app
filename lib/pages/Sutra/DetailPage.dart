@@ -872,6 +872,7 @@ class _DetailPageState extends State<DetailPage> {
           text: wordText,
           style: TextStyle(
             backgroundColor: isCurrent ? Colors.yellow : null,
+            color: isCurrent && _isDarkMode ? Colors.black : null,
             fontWeight: isCurrent ? FontWeight.bold : null,
           ),
         ),

@@ -373,6 +373,7 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
               return _CategoryCard(
                 category: cat,
                 isDark: isDark,
+                isSelected: _selectedCode == cat.code,
                 onTap: () => _selectCategory(cat),
               );
             },
@@ -573,19 +574,29 @@ class _CategoryInfo {
 class _CategoryCard extends StatelessWidget {
   final _CategoryInfo category;
   final bool isDark;
+  final bool isSelected;
   final VoidCallback onTap;
 
   const _CategoryCard({
     required this.category,
     required this.isDark,
+    required this.isSelected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: isSelected ? 6 : 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isSelected
+            ? BorderSide(
+                color: isDark ? Colors.brown[200]! : Colors.brown,
+                width: 2.5,
+              )
+            : BorderSide.none,
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,

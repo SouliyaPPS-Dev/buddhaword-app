@@ -1052,6 +1052,7 @@ class _BookReadingScreenPageState extends State<BookReadingScreenPage> {
           text: wordText,
           style: TextStyle(
             backgroundColor: isCurrent ? Colors.yellow : null,
+            color: isCurrent && (isDarkMode ?? false) ? Colors.black : null,
             fontWeight: isCurrent ? FontWeight.bold : null,
           ),
         ),
