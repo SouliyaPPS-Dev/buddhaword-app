@@ -172,8 +172,10 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
 
   void _shareContent() {
     if (_plainText == null) return;
+    final href = 'https://buddhaword-web.hf.space/etipitaka/$_currentCode/$_currentVolume/$_currentPage';
+    final shareText = '$_currentTitle\n$href';
     SharePlus.instance.share(
-      ShareParams(text: _plainText!, subject: _currentTitle),
+      ShareParams(text: shareText, subject: _currentTitle),
     );
   }
 

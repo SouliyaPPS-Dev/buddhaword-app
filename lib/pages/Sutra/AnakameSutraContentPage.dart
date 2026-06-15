@@ -45,6 +45,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   late String _currentUrl;
   late String _currentTitle;
   late int _currentIndex;
+  String _currentHref = '';
 
   final AudioPlayer _player = AudioPlayer();
   bool _isPlaying = false;
@@ -154,6 +155,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       _currentIndex = index;
       _currentTitle = item.title;
       _currentUrl = _resolveUrl(item.url);
+      _currentHref = item.url;
     });
     _loadFavoriteState();
     if (!_contentCache.containsKey(index)) {
@@ -244,8 +246,11 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
 
   void _shareContent() {
     if (_htmlContent == null) return;
-    final text = _extractPlainText(_htmlContent!);
-    Share.share(text, subject: _currentTitle);
+    final href = _currentHref.isNotEmpty
+        ? _currentHref
+        : _currentUrl;
+    final shareUrl = 'https://buddhaword-web.hf.space/anakame/read?href=$href';
+    Share.share('$_currentTitle\n$shareUrl', subject: _currentTitle);
   }
 
   Future<void> _loadFavoriteState() async {

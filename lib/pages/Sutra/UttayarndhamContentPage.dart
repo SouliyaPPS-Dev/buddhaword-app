@@ -46,6 +46,7 @@ class _UttayarndhamContentPageState
   late String _currentUrl;
   late String _currentTitle;
   late int _currentIndex;
+  String _currentRelUrl = '';
 
   final AudioPlayer _player = AudioPlayer();
   bool _isPlaying = false;
@@ -161,6 +162,7 @@ class _UttayarndhamContentPageState
       _currentIndex = index;
       _currentTitle = item.title;
       _currentUrl = 'https://uttayarndham.org${item.url}';
+      _currentRelUrl = item.url;
     });
     if (_contentCache.containsKey(index)) {
       setState(() {
@@ -249,8 +251,11 @@ class _UttayarndhamContentPageState
 
   void _shareContent() {
     if (_htmlContent == null) return;
-    final text = _extractPlainText(_htmlContent!);
-    Share.share(text, subject: _currentTitle);
+    final href = _currentRelUrl.isNotEmpty
+        ? _currentRelUrl
+        : _currentUrl;
+    final shareUrl = 'https://buddhaword-web.hf.space/uttayarndham/read?url=$href';
+    Share.share('$_currentTitle\n$shareUrl', subject: _currentTitle);
   }
 
   Future<void> _loadFavoriteState() async {
