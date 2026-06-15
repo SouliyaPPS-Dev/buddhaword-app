@@ -723,7 +723,7 @@ class _DetailPageState extends State<DetailPage> {
                     const SizedBox(height: 10),
                     Center(
                       child: SelectableText(
-                        item['title'],
+                        item['title'] ?? '',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 20,
@@ -735,7 +735,7 @@ class _DetailPageState extends State<DetailPage> {
                     const SizedBox(height: 10),
                     const Divider(color: Colors.black, thickness: 1, height: 1),
                     const SizedBox(height: 0),
-                    _buildSutraContent(item['details']),
+                    _buildSutraContent(item['details'] ?? ''),
                     const SizedBox(height: 60),
                   ],
                 ),
@@ -1229,7 +1229,7 @@ class _DetailPageState extends State<DetailPage> {
     }
 
     final item = widget.items[_currentIndex];
-    String content = await _fetchData(item['details']);
+    String content = await _fetchData(item['details'] ?? '');
     content = content.replaceAll(RegExp(r'<\/?b>'), '');
     if (content.length > _ttsMaxChars) {
       content = content.substring(0, _ttsMaxChars);
@@ -1396,8 +1396,8 @@ class _DetailPageState extends State<DetailPage> {
   void _shareDetailLink() {
     final item = widget.items[_currentIndex];
     final shareText =
-        '${item['title']}\n https://buddhaword-web.hf.space/sutra/details/${item['id']}';
-    Share.share(shareText, subject: item['title']);
+        '${item['title'] ?? ''}\n https://buddhaword-web.hf.space/sutra/details/${item['id'] ?? ''}';
+    Share.share(shareText, subject: item['title'] ?? '');
   }
 
   Future<String> _fetchData(String detail) async {
@@ -1462,7 +1462,7 @@ class _DetailPageState extends State<DetailPage> {
 
   Future<void> _copyContentToClipboard() async {
     final item = widget.items[_currentIndex];
-    String content = await _fetchData(item['details']);
+    String content = await _fetchData(item['details'] ?? '');
     String cleanedText = content.replaceAll(RegExp(r'<\/?b>'), '');
     Clipboard.setData(ClipboardData(text: cleanedText));
     if (mounted) {
