@@ -200,7 +200,10 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
         final href = m.group(1)!.trim();
         final title = m.group(2)!.trim();
         if (href.contains('dhamma-sharing') && title.isNotEmpty) {
-          results.add(UttayarndhamItem(title: title, url: href));
+          final normalized = href.startsWith('http')
+              ? Uri.parse(href).path
+              : href;
+          results.add(UttayarndhamItem(title: title, url: normalized));
         }
       }
     }
@@ -380,7 +383,7 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
                       MaterialPageRoute(
                         builder: (context) => UttayarndhamContentPage(
                           title: item.title,
-                          contentUrl: '$_baseUrl${item.url}',
+                          contentUrl: item.url.startsWith('http') ? item.url : '$_baseUrl${item.url}',
                           items: _filteredItems,
                           itemIndex: index,
                           searchQuery: _searchQuery,

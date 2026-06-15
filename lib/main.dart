@@ -627,10 +627,13 @@ class _MyHomePageState extends State<MyHomePage> {
       String text,
       String searchTerm,
     ) {
+      final theme = Theme.of(context);
+      final themeStyle = theme.textTheme.bodyLarge;
+
       if (searchTerm.isEmpty) {
         return TextSpan(
           text: text,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          style: themeStyle?.copyWith(
             fontSize: 17,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,
@@ -639,38 +642,39 @@ class _MyHomePageState extends State<MyHomePage> {
       }
 
       final RegExp regex = RegExp(
-        searchTerm,
+        RegExp.escape(searchTerm),
         caseSensitive: false,
       ); //Case Insensitive
       final List<TextSpan> spans = [];
       int lastIndex = 0;
+
+      final effectiveStyle = themeStyle?.copyWith(
+        fontSize: 17,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 0.5,
+      );
 
       regex.allMatches(text).forEach((match) {
         final String beforeMatch = text.substring(lastIndex, match.start);
         final String matchedText = text.substring(match.start, match.end);
 
         // Add normal text before match
-        spans.add(
-          TextSpan(
-            text: beforeMatch,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
+        if (beforeMatch.isNotEmpty) {
+          spans.add(
+            TextSpan(
+              text: beforeMatch,
+              style: effectiveStyle,
             ),
-          ),
-        );
+          );
+        }
 
         // Add highlighted matched text
         spans.add(
           TextSpan(
             text: matchedText,
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
+            style: effectiveStyle?.copyWith(
               color: Colors.black, // Highlight color
-              backgroundColor: Color(0xFFFFD700), // Yellow highlight
+              backgroundColor: const Color(0xFFFFD700), // Yellow highlight
             ),
           ),
         );
@@ -679,16 +683,14 @@ class _MyHomePageState extends State<MyHomePage> {
       });
 
       // Add remaining text with theme color
-      spans.add(
-        TextSpan(
-          text: text.substring(lastIndex),
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
+      if (lastIndex < text.length) {
+        spans.add(
+          TextSpan(
+            text: text.substring(lastIndex),
+            style: effectiveStyle,
           ),
-        ),
-      );
+        );
+      }
 
       return TextSpan(children: spans);
     }

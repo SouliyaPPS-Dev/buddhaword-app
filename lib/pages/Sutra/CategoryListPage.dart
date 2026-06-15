@@ -128,13 +128,12 @@ class _CategoryListPageState extends State<CategoryListPage> {
       String searchTerm,
     ) {
       final theme = Theme.of(context);
-      final textColor =
-          theme.textTheme.bodyLarge?.color; // Dynamically get the color
+      final themeStyle = theme.textTheme.bodyLarge;
 
       if (searchTerm.isEmpty) {
         return TextSpan(
           text: text,
-          style: theme.textTheme.bodyLarge?.copyWith(
+          style: themeStyle?.copyWith(
             fontSize: 17,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,
@@ -142,34 +141,30 @@ class _CategoryListPageState extends State<CategoryListPage> {
         );
       }
 
-      final RegExp regex = RegExp(searchTerm, caseSensitive: false);
+      final RegExp regex = RegExp(RegExp.escape(searchTerm), caseSensitive: false);
       final List<TextSpan> spans = [];
       int lastIndex = 0;
+
+      final effectiveStyle = themeStyle?.copyWith(
+        fontSize: 17,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 0.5,
+      );
 
       regex.allMatches(text).forEach((match) {
         final String beforeMatch = text.substring(lastIndex, match.start);
         final String matchedText = text.substring(match.start, match.end);
 
-        spans.add(
-          TextSpan(
-            text: beforeMatch,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
-          ),
-        );
+        if (beforeMatch.isNotEmpty) {
+          spans.add(TextSpan(text: beforeMatch, style: effectiveStyle));
+        }
 
         spans.add(
           TextSpan(
             text: matchedText,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
+            style: effectiveStyle?.copyWith(
               color: Colors.black, // Keep highlight color for visibility
-              backgroundColor: Color(0xFFFFD700),
+              backgroundColor: const Color(0xFFFFD700),
             ),
           ),
         );
@@ -177,17 +172,14 @@ class _CategoryListPageState extends State<CategoryListPage> {
         lastIndex = match.end;
       });
 
-      spans.add(
-        TextSpan(
-          text: text.substring(lastIndex),
-          style: theme.textTheme.bodyLarge?.copyWith(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
-            color: textColor, // Dynamically get theme color
+      if (lastIndex < text.length) {
+        spans.add(
+          TextSpan(
+            text: text.substring(lastIndex),
+            style: effectiveStyle,
           ),
-        ),
-      );
+        );
+      }
 
       return TextSpan(children: spans);
     }

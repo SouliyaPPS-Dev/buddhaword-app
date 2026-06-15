@@ -542,7 +542,7 @@ class _SearchPageState extends State<SearchPage> {
                   'sourceLabel': 'Uttayarndham',
                   'title': item['title'],
                   'payload': {
-                    'contentUrl': 'https://uttayarndham.org$itemUrl',
+                    'contentUrl': itemUrl.startsWith('http') ? itemUrl : 'https://uttayarndham.org$itemUrl',
                     'title': 'Uttayarndham',
                   },
                 });
@@ -640,7 +640,8 @@ class _SearchPageState extends State<SearchPage> {
         final url = m.group(1)!.trim();
         final title = m.group(2)!.trim();
         if (url.contains('dhamma-sharing') && title.isNotEmpty) {
-          items.add({'url': url, 'title': title});
+          final normalized = url.startsWith('http') ? Uri.parse(url).path : url;
+          items.add({'url': normalized, 'title': title});
         }
       }
     }
@@ -674,14 +675,14 @@ class _SearchPageState extends State<SearchPage> {
     Color highlightTextColor = Colors.black,
   }) {
     final theme = Theme.of(context);
-    final textColor = baseStyle?.color ?? theme.textTheme.bodyLarge?.color;
-    final effectiveStyle =
-        baseStyle ??
-        theme.textTheme.bodyLarge?.copyWith(
-          fontSize: highlightFontSize,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        );
+    final themeStyle = theme.textTheme.bodyLarge;
+    
+    final effectiveStyle = (baseStyle ?? themeStyle)?.copyWith(
+      fontSize: baseStyle?.fontSize ?? highlightFontSize,
+      fontWeight: baseStyle?.fontWeight ?? FontWeight.bold,
+      letterSpacing: baseStyle?.letterSpacing ?? 0.5,
+      color: baseStyle?.color ?? themeStyle?.color,
+    );
 
     if (searchTerm.isEmpty) {
       return TextSpan(text: text, style: effectiveStyle);
@@ -698,7 +699,9 @@ class _SearchPageState extends State<SearchPage> {
       final String beforeMatch = text.substring(lastIndex, match.start);
       final String matchedText = text.substring(match.start, match.end);
 
-      spans.add(TextSpan(text: beforeMatch, style: effectiveStyle));
+      if (beforeMatch.isNotEmpty) {
+        spans.add(TextSpan(text: beforeMatch, style: effectiveStyle));
+      }
 
       spans.add(
         TextSpan(
@@ -713,12 +716,14 @@ class _SearchPageState extends State<SearchPage> {
       lastIndex = match.end;
     });
 
-    spans.add(
-      TextSpan(
-        text: text.substring(lastIndex),
-        style: effectiveStyle?.copyWith(color: textColor),
-      ),
-    );
+    if (lastIndex < text.length) {
+      spans.add(
+        TextSpan(
+          text: text.substring(lastIndex),
+          style: effectiveStyle,
+        ),
+      );
+    }
 
     return TextSpan(children: spans);
   }
@@ -1420,7 +1425,10 @@ class _SearchPageState extends State<SearchPage> {
                   context,
                   subtitle,
                   _searchTerm,
-                  baseStyle: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  baseStyle: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                  ),
                   highlightFontSize: 13,
                 ),
                 maxLines: 2,
