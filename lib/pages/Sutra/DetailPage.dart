@@ -65,6 +65,9 @@ class _DetailPageState extends State<DetailPage> {
   int _ttsRunId = 0;
   List<_WordRange> _ttsWords = [];
   int _ttsCurrentWordIndex = -1;
+  List<String> _ttsChunks = [];
+  int _ttsChunkIndex = 0;
+  List<int> _ttsChunkEnds = [];
 
   bool get _isDarkMode => context.watch<ThemeProvider>().isDarkMode;
 
@@ -805,18 +808,29 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   void _updateTtsWordIndex() {
-    if (_ttsWords.isEmpty || _duration.inMilliseconds <= 0) return;
+    if (_ttsWords.isEmpty) return;
+    if (_ttsChunkEnds.isEmpty || _duration.inMilliseconds <= 0) return;
+
+    final chunkEnd = _ttsChunkIndex < _ttsChunkEnds.length
+        ? _ttsChunkEnds[_ttsChunkIndex]
+        : _ttsWords.last.end;
+    final chunkStart = _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
+        ? _ttsChunkEnds[_ttsChunkIndex - 1]
+        : 0;
+    final chunkLength = chunkEnd - chunkStart;
+
     final progress = _position.inMilliseconds / _duration.inMilliseconds;
-    final totalChars = _ttsWords.isNotEmpty ? _ttsWords.last.end : 0;
-    final charIndex = (progress * totalChars).round();
+    final charOffset = chunkStart + (progress * chunkLength).round();
+
     int newIndex = -1;
     for (int i = 0; i < _ttsWords.length; i++) {
-      if (charIndex >= _ttsWords[i].start && charIndex < _ttsWords[i].end) {
+      if (charOffset >= _ttsWords[i].start && charOffset < _ttsWords[i].end) {
         newIndex = i;
         break;
       }
     }
-    if (newIndex != _ttsCurrentWordIndex) {
+    // Forward-only: never go backward (prevents jitter at chunk boundaries)
+    if (newIndex > _ttsCurrentWordIndex) {
       _ttsCurrentWordIndex = newIndex;
     }
   }
@@ -859,6 +873,9 @@ class _DetailPageState extends State<DetailPage> {
       _isLoadingAudio = false;
       _ttsWords = [];
       _ttsCurrentWordIndex = -1;
+      _ttsChunks = [];
+      _ttsChunkIndex = 0;
+      _ttsChunkEnds = [];
     });
   }
 
@@ -1198,6 +1215,20 @@ class _DetailPageState extends State<DetailPage> {
 
     final chunks = _chunkText(content);
     if (chunks.isEmpty) return;
+    _ttsChunks = chunks;
+
+    // Reconstruct original end positions (reverse .trim() from _chunkText)
+    _ttsChunkEnds = [];
+    int pos = 0;
+    for (final chunk in chunks) {
+      final found = content.indexOf(chunk, pos);
+      if (found == -1) {
+        pos += chunk.length;
+      } else {
+        pos = found + chunk.length;
+      }
+      _ttsChunkEnds.add(pos);
+    }
 
     _ttsWords = _buildWordRanges(content);
     _ttsCurrentWordIndex = -1;
@@ -1250,6 +1281,7 @@ class _DetailPageState extends State<DetailPage> {
     }
 
     if (mounted) setState(() => _isLoadingAudio = false);
+    _ttsChunkIndex = 0;
     await _player.setFilePath(file.path);
     await _player.setSpeed(0.85);
     await _player.play();
@@ -1288,6 +1320,7 @@ class _DetailPageState extends State<DetailPage> {
         break;
       }
 
+      _ttsChunkIndex = i;
       await _player.setFilePath(file.path);
       await _player.setSpeed(0.85);
       await _player.play();

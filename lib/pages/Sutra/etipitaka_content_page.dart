@@ -66,6 +66,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
 
   int _ttsChunkIndex = 0;
   List<String> _ttsChunks = [];
+  List<int> _ttsChunkEnds = [];
   final List<Uint8List> _ttsChunkBytes = [];
   File? _nextPrefetchedFile;
   int _ttsRunId = 0;
@@ -395,6 +396,19 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
     _nextPrefetchedFile = null;
     _ttsChunks = _chunkText(ttsText);
 
+    // Reconstruct original end positions (reverse .trim() from _chunkText)
+    _ttsChunkEnds = [];
+    int pos = 0;
+    for (final chunk in _ttsChunks) {
+      final found = ttsText.indexOf(chunk, pos);
+      if (found == -1) {
+        pos += chunk.length;
+      } else {
+        pos = found + chunk.length;
+      }
+      _ttsChunkEnds.add(pos);
+    }
+
     if (_ttsChunks.isEmpty) return;
     _ttsChunkIndex = 0;
 
@@ -439,6 +453,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
     _ttsActive = false;
     _ttsRunId++;
     _ttsChunks = [];
+    _ttsChunkEnds = [];
     _ttsChunkBytes.clear();
     _nextPrefetchedFile = null;
     _player.stop();
@@ -471,18 +486,28 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
   }
 
   void _updateTtsWordIndex() {
-    if (_ttsWords.isEmpty || _duration.inMilliseconds <= 0) return;
+    if (_ttsWords.isEmpty) return;
+    if (_ttsChunkEnds.isEmpty || _duration.inMilliseconds <= 0) return;
+
+    final chunkEnd = _ttsChunkIndex < _ttsChunkEnds.length
+        ? _ttsChunkEnds[_ttsChunkIndex]
+        : _ttsWords.last.end;
+    final chunkStart = _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
+        ? _ttsChunkEnds[_ttsChunkIndex - 1]
+        : 0;
+    final chunkLength = chunkEnd - chunkStart;
+
     final progress = _position.inMilliseconds / _duration.inMilliseconds;
-    final totalChars = _ttsWords.isNotEmpty ? _ttsWords.last.end : 0;
-    final charIndex = (progress * totalChars).round();
+    final charOffset = chunkStart + (progress * chunkLength).round();
+
     int newIndex = -1;
     for (int i = 0; i < _ttsWords.length; i++) {
-      if (charIndex >= _ttsWords[i].start && charIndex < _ttsWords[i].end) {
+      if (charOffset >= _ttsWords[i].start && charOffset < _ttsWords[i].end) {
         newIndex = i;
         break;
       }
     }
-    if (newIndex != _ttsCurrentWordIndex) {
+    if (newIndex > _ttsCurrentWordIndex) {
       _ttsCurrentWordIndex = newIndex;
     }
   }
@@ -550,6 +575,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
     _positionSubscription?.cancel();
     _player.dispose();
     _ttsChunks = [];
+    _ttsChunkEnds = [];
     _nextPrefetchedFile = null;
     super.dispose();
   }

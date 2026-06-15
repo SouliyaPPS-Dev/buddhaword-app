@@ -64,6 +64,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
 
   int _ttsChunkIndex = 0;
   List<String> _ttsChunks = [];
+  List<int> _ttsChunkEnds = [];
   final List<Uint8List> _ttsChunkBytes = [];
   File? _nextPrefetchedFile;
   int _ttsRunId = 0;
@@ -84,6 +85,9 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     _currentUrl = widget.contentUrl;
     _currentTitle = widget.title;
     _currentIndex = widget.itemIndex ?? 0;
+    if (widget.items != null && _currentIndex < widget.items!.length) {
+      _currentHref = widget.items![_currentIndex].url;
+    }
     _fetchContent();
     _loadFontSizeFromSharedPreferences();
     _loadFavoriteState();
@@ -246,10 +250,18 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
 
   void _shareContent() {
     if (_htmlContent == null) return;
-    final href = _currentHref.isNotEmpty
+    String href = _currentHref.isNotEmpty
         ? _currentHref
         : _currentUrl;
-    final shareUrl = 'https://buddhaword-web.hf.space/anakame/read?href=$href';
+    // Normalize: remove ../ and strip fragment
+    href = href.replaceAll('../', '');
+    href = href.replaceAll(RegExp(r'#.*$'), '');
+    // Remove base URL prefix if present (fallback from _currentUrl)
+    const baseUrl = 'http://anakame.com/page/1_Sutas/';
+    if (href.startsWith(baseUrl)) {
+      href = href.substring(baseUrl.length);
+    }
+    final shareUrl = 'https://buddhaword-web.hf.space/anakame/read?href=${Uri.encodeQueryComponent(href)}';
     Share.share('$_currentTitle\n$shareUrl', subject: _currentTitle);
   }
 
@@ -452,6 +464,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
           _duration = Duration.zero;
           _ttsChunkIndex = 0;
           _ttsChunks = [];
+          _ttsChunkEnds = [];
           _nextPrefetchedFile = null;
         });
       }
@@ -479,6 +492,20 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     _nextPrefetchedFile = null;
 
     _ttsChunks = _chunkText(ttsText);
+
+    // Reconstruct original end positions (reverse .trim() from _chunkText)
+    _ttsChunkEnds = [];
+    int pos = 0;
+    for (final chunk in _ttsChunks) {
+      final found = ttsText.indexOf(chunk, pos);
+      if (found == -1) {
+        pos += chunk.length;
+      } else {
+        pos = found + chunk.length;
+      }
+      _ttsChunkEnds.add(pos);
+    }
+
     _ttsChunkIndex = 0;
 
     if (_ttsChunks.isEmpty) return;
@@ -534,6 +561,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
         _duration = Duration.zero;
         _ttsChunkIndex = 0;
         _ttsChunks = [];
+        _ttsChunkEnds = [];
         _nextPrefetchedFile = null;
         _ttsWords = [];
         _ttsCurrentWordIndex = -1;
@@ -869,18 +897,28 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   }
 
   void _updateTtsWordIndex() {
-    if (_ttsWords.isEmpty || _duration.inMilliseconds <= 0) return;
+    if (_ttsWords.isEmpty) return;
+    if (_ttsChunkEnds.isEmpty || _duration.inMilliseconds <= 0) return;
+
+    final chunkEnd = _ttsChunkIndex < _ttsChunkEnds.length
+        ? _ttsChunkEnds[_ttsChunkIndex]
+        : _ttsWords.last.end;
+    final chunkStart = _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
+        ? _ttsChunkEnds[_ttsChunkIndex - 1]
+        : 0;
+    final chunkLength = chunkEnd - chunkStart;
+
     final progress = _position.inMilliseconds / _duration.inMilliseconds;
-    final totalChars = _ttsWords.isNotEmpty ? _ttsWords.last.end : 0;
-    final charIndex = (progress * totalChars).round();
+    final charOffset = chunkStart + (progress * chunkLength).round();
+
     int newIndex = -1;
     for (int i = 0; i < _ttsWords.length; i++) {
-      if (charIndex >= _ttsWords[i].start && charIndex < _ttsWords[i].end) {
+      if (charOffset >= _ttsWords[i].start && charOffset < _ttsWords[i].end) {
         newIndex = i;
         break;
       }
     }
-    if (newIndex != _ttsCurrentWordIndex) {
+    if (newIndex > _ttsCurrentWordIndex) {
       _ttsCurrentWordIndex = newIndex;
     }
   }
