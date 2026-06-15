@@ -21,11 +21,18 @@ import 'BookReadingScreenPage.dart';
 import 'DetailPage.dart';
 import 'UttayarndhamContentPage.dart';
 import 'etipitaka_content_page.dart';
+import '../SearchBooks/search_books_reader_page.dart';
+import '../../providers/search_books_provider.dart';
 
 class SearchPage extends StatefulWidget {
   final String initialSource;
+  final String initialQuery;
 
-  const SearchPage({super.key, this.initialSource = 'all'});
+  const SearchPage({
+    super.key,
+    this.initialSource = 'all',
+    this.initialQuery = '',
+  });
 
   @override
   _SearchPageState createState() => _SearchPageState();
@@ -82,6 +89,7 @@ class _SearchPageState extends State<SearchPage> {
   final List<Map<String, dynamic>> _sourceInfo = [
     {'key': 'all', 'label': 'ທັງໝົດ', 'icon': Icons.search},
     {'key': 'main', 'label': 'ພຣະສູດ', 'icon': Icons.auto_stories},
+    {'key': 'search_books', 'label': 'ໜັງສື', 'icon': Icons.book},
     {'key': 'etipitaka', 'label': 'E-Tipitaka', 'icon': Icons.menu_book},
     {'key': 'anakame', 'label': 'Anakame', 'icon': Icons.language},
     {'key': 'uttayarndham', 'label': 'Uttayarndham', 'icon': Icons.language},
@@ -91,6 +99,10 @@ class _SearchPageState extends State<SearchPage> {
   void initState() {
     super.initState();
     _selectedSource = widget.initialSource;
+    if (widget.initialQuery.isNotEmpty) {
+      _searchController.text = widget.initialQuery;
+      _searchTerm = widget.initialQuery;
+    }
     fetchData(_searchTerm);
     _loadFavorites();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -539,6 +551,29 @@ class _SearchPageState extends State<SearchPage> {
       }
     }
 
+    if (_selectedSource == 'search_books' || _selectedSource == 'all') {
+      try {
+        final provider = context.read<SearchBooksProvider>();
+        final bookResults = await provider.searchAll(query);
+        for (final r in bookResults) {
+          results.add({
+            'source': 'search_books',
+            'sourceLabel': 'ໜັງສື',
+            'title': '${r.bookTitle} · ໜ້າ ${r.page}',
+            'subtitle': r.snippet,
+            'payload': {
+              'slug': r.slug,
+              'title': r.bookTitle,
+              'page': r.page,
+              'query': query,
+            },
+          });
+        }
+      } catch (e) {
+        if (kDebugMode) print('Search books error: $e');
+      }
+    }
+
     if (mounted) {
       setState(() {
         _externalResults = results;
@@ -616,6 +651,8 @@ class _SearchPageState extends State<SearchPage> {
         return Colors.indigo;
       case 'uttayarndham':
         return Colors.deepOrange;
+      case 'search_books':
+        return Colors.purple;
       default:
         return Colors.grey;
     }
@@ -1328,7 +1365,11 @@ class _SearchPageState extends State<SearchPage> {
           radius: 18,
           backgroundColor: _sourceColor(source).withOpacity(0.15),
           child: Icon(
-            source == 'etipitaka' ? Icons.menu_book : Icons.language,
+            source == 'etipitaka'
+                ? Icons.menu_book
+                : source == 'search_books'
+                ? Icons.book
+                : Icons.language,
             color: _sourceColor(source),
             size: 20,
           ),
@@ -1496,6 +1537,19 @@ class _SearchPageState extends State<SearchPage> {
               title: payload['title'] ?? '',
               contentUrl: payload['contentUrl'] ?? '',
               searchQuery: _searchTerm,
+            ),
+          ),
+        );
+        break;
+      case 'search_books':
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SearchBooksReaderPage(
+              slug: payload['slug'] ?? '',
+              title: payload['title'] ?? '',
+              highlightQuery: payload['query'],
+              initialPage: payload['page'],
             ),
           ),
         );
