@@ -897,26 +897,14 @@ class _CalendarPageState extends State<CalendarPage> {
                                                                   );
                                                                 }
                                                               },
-                                                              child: // Location description text with a clickable link
-                                                              InkWell(
-                                                                onTap: () async {
-                                                                  if (await canLaunch(
-                                                                    event[6],
-                                                                  )) {
-                                                                    await launch(
-                                                                      event[6],
-                                                                    );
-                                                                  }
-                                                                },
-                                                                child: Text(
-                                                                  'ສະຖານທີ່ 1: ${event[6]}', // Event Location
-                                                                  style: TextStyle(
-                                                                    color: Colors
-                                                                        .blue,
-                                                                    decoration:
-                                                                        TextDecoration
-                                                                            .underline,
-                                                                  ),
+                                                              child: Text(
+                                                                'ສະຖານທີ່ 1: ${event[6]}', // Event Location
+                                                                style: TextStyle(
+                                                                  color: Colors
+                                                                      .blue,
+                                                                  decoration:
+                                                                      TextDecoration
+                                                                          .underline,
                                                                 ),
                                                               ),
                                                             ),
@@ -935,26 +923,14 @@ class _CalendarPageState extends State<CalendarPage> {
                                                                   );
                                                                 }
                                                               },
-                                                              child: // Location description text with a clickable link
-                                                              InkWell(
-                                                                onTap: () async {
-                                                                  if (await canLaunch(
-                                                                    event[7],
-                                                                  )) {
-                                                                    await launch(
-                                                                      event[7],
-                                                                    );
-                                                                  }
-                                                                },
-                                                                child: Text(
-                                                                  'ສະຖານທີ່ 2: ${event[7]}', // Event Location
-                                                                  style: TextStyle(
-                                                                    color: Colors
-                                                                        .blue,
-                                                                    decoration:
-                                                                        TextDecoration
-                                                                            .underline,
-                                                                  ),
+                                                              child: Text(
+                                                                'ສະຖານທີ່ 2: ${event[7]}', // Event Location
+                                                                style: TextStyle(
+                                                                  color: Colors
+                                                                      .blue,
+                                                                  decoration:
+                                                                      TextDecoration
+                                                                          .underline,
                                                                 ),
                                                               ),
                                                             ),
@@ -973,26 +949,14 @@ class _CalendarPageState extends State<CalendarPage> {
                                                                   );
                                                                 }
                                                               },
-                                                              child: // Location description text with a clickable link
-                                                              InkWell(
-                                                                onTap: () async {
-                                                                  if (await canLaunch(
-                                                                    event[8],
-                                                                  )) {
-                                                                    await launch(
-                                                                      event[8],
-                                                                    );
-                                                                  }
-                                                                },
-                                                                child: Text(
-                                                                  'ສະຖານທີ່ 3: ${event[8]}', // Event Location
-                                                                  style: TextStyle(
-                                                                    color: Colors
-                                                                        .blue,
-                                                                    decoration:
-                                                                        TextDecoration
-                                                                            .underline,
-                                                                  ),
+                                                              child: Text(
+                                                                'ສະຖານທີ່ 3: ${event[8]}', // Event Location
+                                                                style: TextStyle(
+                                                                  color: Colors
+                                                                      .blue,
+                                                                  decoration:
+                                                                      TextDecoration
+                                                                          .underline,
                                                                 ),
                                                               ),
                                                             ),

@@ -453,7 +453,7 @@ class _CategoryListPageState extends State<CategoryListPage> {
                           crossAxisCount: crossAxisCount,
                           crossAxisSpacing: 16.0,
                           mainAxisSpacing: 16.0,
-                          childAspectRatio: 16 / constraints.maxWidth >= 667
+                          childAspectRatio: constraints.maxWidth <= 667
                               ? 0.8
                               : constraints.maxWidth >= 1024
                               ? 1.3
