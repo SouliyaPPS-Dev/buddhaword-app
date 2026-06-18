@@ -23,6 +23,7 @@ class AnakameSutraContentPage extends StatefulWidget {
   final List<AnakameSutraItem>? items;
   final int? itemIndex;
   final String searchQuery;
+  final bool tagListing;
 
   const AnakameSutraContentPage({
     super.key,
@@ -31,6 +32,7 @@ class AnakameSutraContentPage extends StatefulWidget {
     this.items,
     this.itemIndex,
     this.searchQuery = '',
+    this.tagListing = false,
   });
 
   @override
@@ -46,6 +48,17 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   late String _currentTitle;
   late int _currentIndex;
   String _currentHref = '';
+
+  List<AnakameSutraItem> _categoryItems = [];
+  List<AnakameSutraItem> _filteredCategoryItems = [];
+  bool _isCategoryLoading = false;
+
+  int _categoryDisplayCount = 0;
+  static const int _pageSize = 20;
+
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  String _searchQuery = '';
 
   final AudioPlayer _player = AudioPlayer();
   bool _isPlaying = false;
@@ -81,14 +94,19 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: widget.itemIndex ?? 0);
     _currentUrl = widget.contentUrl;
     _currentTitle = widget.title;
     _currentIndex = widget.itemIndex ?? 0;
     if (widget.items != null && _currentIndex < widget.items!.length) {
       _currentHref = widget.items![_currentIndex].url;
     }
-    _fetchContent();
+    _scrollController.addListener(_onCategoryScroll);
+    _pageController = PageController(initialPage: _currentIndex);
+    if (widget.tagListing) {
+      _fetchCategoryItems();
+    } else {
+      _fetchContent();
+    }
     _loadFontSizeFromSharedPreferences();
     _loadFavoriteState();
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
@@ -96,7 +114,110 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     });
   }
 
+  void _onCategoryScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !_isCategoryLoading &&
+        _categoryDisplayCount < _filteredCategoryItems.length) {
+      _loadMoreCategoryItems();
+    }
+  }
+
+  void _loadMoreCategoryItems() {
+    setState(() {
+      final nextCount = _categoryDisplayCount + _pageSize;
+      _categoryDisplayCount = nextCount > _filteredCategoryItems.length
+          ? _filteredCategoryItems.length
+          : nextCount;
+    });
+  }
+
+  Future<void> _fetchCategoryItems() async {
+    setState(() {
+      _isCategoryLoading = true;
+      _error = null;
+    });
+    try {
+      final response = await http.get(Uri.parse(_currentUrl));
+      if (response.statusCode == 200) {
+        String decoded = utf8.decode(response.bodyBytes);
+        if (decoded.startsWith('\uFEFF')) decoded = decoded.substring(1);
+        final items = _parseCategoryItems(decoded);
+        if (mounted) {
+          setState(() {
+            _categoryItems = items;
+            _filteredCategoryItems = List.from(items);
+            _categoryDisplayCount =
+                items.length > _pageSize ? _pageSize : items.length;
+            _isCategoryLoading = false;
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _error = 'Failed to load (${response.statusCode})';
+            _isCategoryLoading = false;
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          if (!_isOffline) _error = 'ການໂຫຼດຂໍ້ມູນລົ້ມເຫຼວ (ກະລຸນາກວດສອບການເຊື່ອມຕໍ່)';
+          _isCategoryLoading = false;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  List<AnakameSutraItem> _parseCategoryItems(String html) {
+    final seen = <String>{};
+    final items = <AnakameSutraItem>[];
+
+    for (final m in RegExp(
+      r'<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+      dotAll: true,
+    ).allMatches(html)) {
+      final href = m.group(1)!.trim();
+      final inner = m.group(2)!.trim();
+
+      // Skip navigation links, image links, empty links
+      if (inner.contains('<img') || inner.isEmpty) continue;
+      if (href.startsWith('#') || href.startsWith('javascript')) continue;
+      if (href.contains('index.htm') || href.contains('favicon')) continue;
+
+      // Only take links to .htm pages
+      if (!href.contains('.htm') && !href.contains('.html')) continue;
+
+      // Clean the title text
+      final title = inner
+          .replaceAll(RegExp(r'<[^>]*>'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (title.isEmpty || title.length < 3) continue;
+
+      // Resolve URL
+      final absUrl = _resolveUrl(href);
+      if (seen.contains(absUrl)) continue;
+      seen.add(absUrl);
+
+      items.add(AnakameSutraItem(title: title, url: absUrl));
+    }
+    return items;
+  }
+
   Future<void> _fetchContent() async {
+    if (_contentCache.containsKey(_currentIndex)) {
+      setState(() {
+        _htmlContent = _contentCache[_currentIndex]!;
+        _isLoading = false;
+        _error = null;
+      });
+      return;
+    }
     setState(() {
       _isLoading = true;
       _error = null;
@@ -105,15 +226,13 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       final response = await http.get(Uri.parse(_currentUrl));
       if (response.statusCode == 200) {
         String decoded = utf8.decode(response.bodyBytes);
-        if (decoded.startsWith('\uFEFF')) {
-          decoded = decoded.substring(1);
-        }
-        _contentCache[_currentIndex] = decoded;
+        if (decoded.startsWith('\uFEFF')) decoded = decoded.substring(1);
         if (mounted) {
           setState(() {
             _htmlContent = decoded;
             _isLoading = false;
           });
+          _contentCache[_currentIndex] = decoded;
         }
       } else {
         if (mounted) {
@@ -153,6 +272,9 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
 
   void _onPageChanged(int index) {
     if (widget.items == null) return;
+    if (_htmlContent != null && !_contentCache.containsKey(_currentIndex)) {
+      _contentCache[_currentIndex] = _htmlContent!;
+    }
     _stopTts();
     final item = widget.items![index];
     setState(() {
@@ -162,40 +284,43 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       _currentHref = item.url;
     });
     _loadFavoriteState();
-    if (!_contentCache.containsKey(index)) {
-      _fetchContentForIndex(index);
+    if (_contentCache.containsKey(index)) {
+      setState(() {
+        _htmlContent = _contentCache[index]!;
+        _isLoading = false;
+        _error = null;
+      });
+    } else {
+      setState(() {
+        _htmlContent = null;
+        _isLoading = true;
+        _error = null;
+      });
+      _fetchContent();
     }
-  }
-
-  Future<void> _fetchContentForIndex(int index) async {
-    if (widget.items == null) return;
-    final item = widget.items![index];
-    final url = _resolveUrl(item.url);
-    try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        String decoded = utf8.decode(response.bodyBytes);
-        if (decoded.startsWith('\uFEFF')) {
-          decoded = decoded.substring(1);
-        }
-        _contentCache[index] = decoded;
-        if (mounted && index == _currentIndex) {
-          setState(() {
-            _htmlContent = decoded;
-            _isLoading = false;
-          });
-        } else if (mounted) {
-          setState(() {});
-        }
-      }
-    } catch (_) {}
   }
 
   String _resolveUrl(String href) {
     if (href.startsWith('http')) return href;
-    const baseUrl = 'http://anakame.com/page/1_Sutas/main/1_Sutta_number.htm';
-    final uri = Uri.parse(baseUrl);
-    return uri.resolve(href).toString();
+    final base = Uri.parse(_currentUrl);
+    return base.resolve(href).toString();
+  }
+
+  void _onCategorySearch(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredCategoryItems = List.from(_categoryItems);
+      } else {
+        final lower = query.toLowerCase();
+        _filteredCategoryItems = _categoryItems
+            .where((item) => item.title.toLowerCase().contains(lower))
+            .toList();
+      }
+      _categoryDisplayCount = _filteredCategoryItems.length > _pageSize
+          ? _pageSize
+          : _filteredCategoryItems.length;
+    });
   }
 
   List<String> _extractParagraphs(String html) {
@@ -249,17 +374,9 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
 
   void _shareContent() {
     if (_htmlContent == null) return;
-    String href = _currentHref.isNotEmpty
-        ? _currentHref
-        : _currentUrl;
-    // Normalize: remove ../ and strip fragment
+    String href = _currentHref.isNotEmpty ? _currentHref : _currentUrl;
     href = href.replaceAll('../', '');
     href = href.replaceAll(RegExp(r'#.*$'), '');
-    // Remove base URL prefix if present (fallback from _currentUrl)
-    const baseUrl = 'http://anakame.com/page/1_Sutas/';
-    if (href.startsWith(baseUrl)) {
-      href = href.substring(baseUrl.length);
-    }
     final shareUrl = 'https://buddhaword-web.hf.space/anakame/read?href=${Uri.encodeQueryComponent(href)}';
     Share.share('$_currentTitle\n$shareUrl', subject: _currentTitle);
   }
@@ -492,7 +609,6 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
 
     _ttsChunks = _chunkText(ttsText);
 
-    // Reconstruct original end positions (reverse .trim() from _chunkText)
     _ttsChunkEnds = [];
     int pos = 0;
     for (final chunk in _ttsChunks) {
@@ -628,6 +744,8 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   void dispose() {
     _ttsRunId++;
     _connectivitySubscription?.cancel();
+    _scrollController.dispose();
+    _searchController.dispose();
     _player.stop();
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();
@@ -711,7 +829,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
             children: [
               _buildOfflineBanner(),
               Expanded(child: _buildBody()),
-              _buildTtsBar(),
+              if (!widget.tagListing) _buildTtsBar(),
             ],
           ),
           if (_isFullScreen)
@@ -734,7 +852,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
                 ),
               ),
             ),
-          if (!_isFullScreen && _hasPrev)
+          if (!_isFullScreen && _hasPrev && !widget.tagListing)
             Positioned(
               left: 0,
               top: 0,
@@ -750,7 +868,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
                 ),
               ),
             ),
-          if (!_isFullScreen && _hasNext)
+          if (!_isFullScreen && _hasNext && !widget.tagListing)
             Positioned(
               right: 0,
               top: 0,
@@ -769,7 +887,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: _isFullScreen
+      floatingActionButton: _isFullScreen || widget.tagListing
           ? null
           : Padding(
               padding: EdgeInsets.only(
@@ -815,6 +933,9 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   }
 
   Widget _buildBody() {
+    if (widget.tagListing) {
+      return _buildCategoryItemsView();
+    }
     if (widget.items != null && widget.items!.length > 1) {
       return PageView.builder(
         controller: _pageController,
@@ -824,6 +945,120 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       );
     }
     return _buildSingleContent();
+  }
+
+  Widget _buildCategoryItemsView() {
+    if (_isCategoryLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!, style: TextStyle(color: Colors.red)),
+            SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _fetchCategoryItems,
+              child: Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: TextField(
+            controller: _searchController,
+            onChanged: _onCategorySearch,
+            style: TextStyle(color: isDark ? Colors.grey[100] : Colors.grey[900]),
+            decoration: InputDecoration(
+              hintText: 'Search in ${widget.title}...',
+              hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+              prefixIcon: Icon(Icons.search, color: isDark ? Colors.brown[200] : Colors.brown),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(Icons.clear, color: isDark ? Colors.brown[200] : Colors.brown),
+                      onPressed: () {
+                        _searchController.clear();
+                        _onCategorySearch('');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+            ),
+          ),
+        ),
+        if (_filteredCategoryItems.isEmpty)
+          Expanded(
+            child: Center(child: Text('No items found')),
+          )
+        else
+          Expanded(
+            child: ListView.separated(
+              controller: _scrollController,
+              itemCount: _categoryDisplayCount +
+                  (_categoryDisplayCount < _filteredCategoryItems.length ? 1 : 0),
+              separatorBuilder: (context, index) => Divider(height: 1),
+              itemBuilder: (context, index) {
+                if (index == _categoryDisplayCount) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.brown,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                final item = _filteredCategoryItems[index];
+                return ListTile(
+                  title: RichText(
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                        color: isDark ? Colors.grey[100] : Colors.grey[900],
+                      ),
+                      children: _highlightText(item.title, _searchQuery),
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: Colors.brown),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AnakameSutraContentPage(
+                          title: item.title,
+                          contentUrl: item.url,
+                          tagListing: false,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _buildSingleContent() {
@@ -1116,11 +1351,8 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     return '${d.inHours > 0 ? '${d.inHours}:' : ''}$m:$s';
   }
 
-  TextSpan _buildHighlightedSpan(String text) {
-    final query = widget.searchQuery;
-    if (query.isEmpty) {
-      return TextSpan(text: text);
-    }
+  List<TextSpan> _highlightText(String text, String query) {
+    if (query.isEmpty) return [TextSpan(text: text)];
     final spans = <TextSpan>[];
     final lower = text.toLowerCase();
     final qLower = query.toLowerCase();
@@ -1146,7 +1378,15 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     if (start < text.length) {
       spans.add(TextSpan(text: text.substring(start)));
     }
-    return TextSpan(children: spans);
+    return spans;
+  }
+
+  TextSpan _buildHighlightedSpan(String text) {
+    final query = widget.searchQuery;
+    if (query.isEmpty) {
+      return TextSpan(text: text);
+    }
+    return TextSpan(children: _highlightText(text, query));
   }
 }
 

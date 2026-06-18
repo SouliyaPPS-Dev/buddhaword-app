@@ -12,6 +12,8 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
 import '../../themes/ThemeProvider.dart';
@@ -23,6 +25,7 @@ class UttayarndhamContentPage extends StatefulWidget {
   final List<UttayarndhamItem>? items;
   final int? itemIndex;
   final String searchQuery;
+  final bool tagListing;
 
   const UttayarndhamContentPage({
     super.key,
@@ -31,6 +34,7 @@ class UttayarndhamContentPage extends StatefulWidget {
     this.items,
     this.itemIndex,
     this.searchQuery = '',
+    this.tagListing = false,
   });
 
   @override
@@ -38,8 +42,7 @@ class UttayarndhamContentPage extends StatefulWidget {
       _UttayarndhamContentPageState();
 }
 
-class _UttayarndhamContentPageState
-    extends State<UttayarndhamContentPage> {
+class _UttayarndhamContentPageState extends State<UttayarndhamContentPage> {
   String? _htmlContent;
   bool _isLoading = true;
   String? _error;
@@ -79,6 +82,16 @@ class _UttayarndhamContentPageState
   bool _isOffline = false;
   StreamSubscription? _connectivitySubscription;
 
+  final TextEditingController _tagSearchController = TextEditingController();
+  String _tagSearchQuery = '';
+  List<UttayarndhamItem> _filteredTagItems = [];
+
+  final TextEditingController _contentSearchController =
+      TextEditingController();
+  String _contentSearchQuery = '';
+
+  List<_MediaItem> _mediaItems = [];
+
   @override
   void initState() {
     super.initState();
@@ -92,8 +105,12 @@ class _UttayarndhamContentPageState
     _fetchContent();
     _loadFontSizeFromSharedPreferences();
     _loadFavoriteState();
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
-      if (mounted) setState(() => _isOffline = results.contains(ConnectivityResult.none));
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) {
+      if (mounted) {
+        setState(() => _isOffline = results.contains(ConnectivityResult.none));
+      }
     });
   }
 
@@ -113,10 +130,12 @@ class _UttayarndhamContentPageState
     try {
       final response = await http.get(Uri.parse(_currentUrl));
       if (response.statusCode == 200) {
+        final media = _extractIframeUrls(response.body);
         final extracted = _extractContent(response.body);
         if (mounted) {
           setState(() {
             _htmlContent = extracted;
+            _mediaItems = media;
             _isLoading = false;
           });
           _contentCache[_currentIndex] = extracted;
@@ -132,7 +151,9 @@ class _UttayarndhamContentPageState
     } catch (e) {
       if (mounted) {
         setState(() {
-          if (!_isOffline) _error = 'ການໂຫຼດຂໍ້ມູນລົ້ມເຫຼວ (ກະລຸນາກວດສອບການເຊື່ອມຕໍ່)';
+          if (!_isOffline) {
+            _error = 'ການໂຫຼດຂໍ້ມູນລົ້ມເຫຼວ (ກະລຸນາກວດສອບການເຊື່ອມຕໍ່)';
+          }
           _isLoading = false;
         });
       }
@@ -171,12 +192,14 @@ class _UttayarndhamContentPageState
     if (_contentCache.containsKey(index)) {
       setState(() {
         _htmlContent = _contentCache[index]!;
+        _mediaItems = [];
         _isLoading = false;
         _error = null;
       });
     } else {
       setState(() {
         _htmlContent = null;
+        _mediaItems = [];
         _isLoading = true;
         _error = null;
       });
@@ -185,44 +208,138 @@ class _UttayarndhamContentPageState
     _loadFavoriteState();
   }
 
-  String _extractContent(String html) {
-    // Find node__content div boundaries
-    const nodeClass = 'node__content';
-    final nodeIdx = html.indexOf(nodeClass);
-    if (nodeIdx < 0) return html;
-    final nodeDivStart = html.lastIndexOf('<div', nodeIdx);
-    if (nodeDivStart < 0) return html;
-    final nodeEndPos = _findDivEnd(html, nodeDivStart);
-    if (nodeEndPos < 0) return html;
-    final nodeContent = html.substring(nodeDivStart, nodeEndPos);
+  void _onTagItemSearch(String query) {
+    setState(() {
+      _tagSearchQuery = query;
+      if (query.isEmpty) {
+        _filteredTagItems = List.from(widget.items ?? []);
+      } else {
+        final lower = query.toLowerCase();
+        _filteredTagItems = (widget.items ?? [])
+            .where((item) => item.title.toLowerCase().contains(lower))
+            .toList();
+      }
+    });
+  }
 
-    // Try field--name-body within node__content (avoids sidebar/menu matches)
-    const bodyClass = 'field--name-body';
-    final bodyIdx = nodeContent.indexOf(bodyClass);
-    if (bodyIdx >= 0) {
-      final bodyDivStart = nodeContent.lastIndexOf('<div', bodyIdx);
-      if (bodyDivStart >= 0) {
-        final bodyEndPos = _findDivEnd(nodeContent, bodyDivStart);
-        if (bodyEndPos > 0) {
-          return nodeContent.substring(bodyDivStart, bodyEndPos);
+  void _onContentSearch(String query) {
+    setState(() => _contentSearchQuery = query);
+  }
+
+  List<_MediaItem> _extractIframeUrls(String html) {
+    final items = <_MediaItem>[];
+
+    // Detect media URLs in iframes
+    for (final m in RegExp(
+      r'<iframe[^>]*src="([^"]+)"[^>]*>',
+      dotAll: true,
+    ).allMatches(html)) {
+      final src = m.group(1)!;
+      if (src.contains('soundcloud.com') || src.contains('player.')) {
+        items.add(_MediaItem(src, _MediaType.audio, embedUrl: src));
+      } else if (src.contains('youtube.com') || src.contains('youtu.be')) {
+        _addYoutubeIfNotExists(items, src);
+      }
+    }
+
+    // Detect YouTube links in <a> tags
+    for (final m in RegExp(
+      r'<a[^>]*href="([^"]+)"[^>]*>',
+      dotAll: true,
+    ).allMatches(html)) {
+      final href = m.group(1)!;
+      if ((href.contains('youtube.com') || href.contains('youtu.be')) &&
+          !href.contains('/channel/') &&
+          !href.contains('/c/') &&
+          !href.contains('/user/')) {
+        _addYoutubeIfNotExists(items, href);
+      }
+    }
+
+    return items;
+  }
+
+  void _addYoutubeIfNotExists(List<_MediaItem> items, String url) {
+    final videoId = YoutubePlayerController.convertUrlToId(url);
+    if (videoId == null) return;
+    if (items.any((i) => i.type == _MediaType.video && i.videoId == videoId)) {
+      return;
+    }
+    items.add(
+      _MediaItem(
+        'https://www.youtube.com/watch?v=$videoId',
+        _MediaType.video,
+        videoId: videoId,
+      ),
+    );
+  }
+
+  String _extractContent(String html) {
+    final buf = StringBuffer();
+
+    // Extract <h1> title (dhamma-sharing pages)
+    final h1Match = RegExp(
+      r'<h1[^>]*>(.*?)</h1>',
+      dotAll: true,
+    ).firstMatch(html);
+    if (h1Match != null) {
+      buf.writeln(h1Match.group(1)!.replaceAll(RegExp(r'<[^>]*>'), '').trim());
+    }
+
+    // Extract <h3> title (tag/term pages)
+    if (h1Match == null) {
+      final h3Match = RegExp(
+        r'<h3[^>]*>(.*?)</h3>',
+        dotAll: true,
+      ).firstMatch(html);
+      if (h3Match != null) {
+        buf.writeln(
+          h3Match.group(1)!.replaceAll(RegExp(r'<[^>]*>'), '').trim(),
+        );
+      }
+      // Extract <h4> links (content items on tag pages)
+      for (final m in RegExp(
+        r'<h4[^>]*>.*?<a\s+href="\s*([^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
+        dotAll: true,
+      ).allMatches(html)) {
+        final title = m.group(2)!.trim();
+        if (title.isNotEmpty) {
+          buf.writeln('• $title');
         }
       }
     }
 
-    return nodeContent;
-  }
+    // Extract question div content
+    final qMatch = RegExp(
+      r'<div[^>]*class="[^"]*question[^"]*"[^>]*>(.*?)</div>',
+      dotAll: true,
+    ).firstMatch(html);
+    if (qMatch != null) {
+      buf.writeln(qMatch.group(1)!.replaceAll(RegExp(r'<[^>]*>'), '').trim());
+    }
 
-  int _findDivEnd(String html, int divStart) {
-    int depth = 0;
-    for (int i = divStart; i < html.length; i++) {
-      if (html.substring(i).startsWith('<div')) { depth++; i += 3; }
-      else if (html.substring(i).startsWith('</div>')) {
-        depth--;
-        if (depth <= 0) return i + 6;
-        i += 5;
+    // Extract answer div content
+    final aMatch = RegExp(
+      r'<div[^>]*class="[^"]*answer[^"]*"[^>]*>(.*?)</div>',
+      dotAll: true,
+    ).firstMatch(html);
+    if (aMatch != null) {
+      buf.writeln(aMatch.group(1)!.replaceAll(RegExp(r'<[^>]*>'), '').trim());
+    }
+
+    // Extract all <p> tags with their HTML content
+    for (final m in RegExp(
+      r'<p[^>]*>(.*?)</p>',
+      dotAll: true,
+    ).allMatches(html)) {
+      final pContent = m.group(1)!.trim();
+      if (pContent.isNotEmpty) {
+        buf.writeln('<p>$pContent</p>');
       }
     }
-    return -1;
+
+    final result = buf.toString().trim();
+    return result.isNotEmpty ? result : html;
   }
 
   List<String> _extractParagraphs(String html) {
@@ -237,24 +354,35 @@ class _UttayarndhamContentPageState
         .replaceAll(RegExp(r'<br\s*/?>'), '\n')
         .replaceAll(RegExp(r'<p[^>]*>'), '\n')
         .replaceAll(RegExp(r'</p>'), '\n')
+        .replaceAll(RegExp(r'<div[^>]*>'), '\n')
+        .replaceAll(RegExp(r'</div>'), '\n')
         .replaceAll(RegExp(r'<[^>]*>'), '')
         .replaceAll(RegExp(r'\u00A0'), ' ')
         .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
         .trim();
 
-    final lines = text.split('\n')
+    final lines = text
+        .split('\n')
         .map((line) => line.trim())
-        .where((line) => line.isNotEmpty && line.length >= 4)
+        .where((line) => line.isNotEmpty)
         .toList();
 
-    if (lines.length < 3) {
-      final words = text.split(' ').where((w) => w.trim().isNotEmpty).toList();
+    if (lines.isEmpty) return lines;
+
+    final words = text
+        .split(RegExp(r'[\s\n]+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    if (words.isEmpty) return [];
+
+    if (lines.length < 3 && words.length > 3) {
       final grouped = <String>[];
-      for (int i = 0; i < words.length; i += 20) {
-        final end = (i + 20 < words.length) ? i + 20 : words.length;
+      for (int i = 0; i < words.length; i += 15) {
+        final end = (i + 15 < words.length) ? i + 15 : words.length;
         grouped.add(words.sublist(i, end).join(' '));
       }
-      return grouped.where((g) => g.length >= 4).toList();
+      return grouped;
     }
 
     return lines;
@@ -276,10 +404,9 @@ class _UttayarndhamContentPageState
 
   void _shareContent() {
     if (_htmlContent == null) return;
-    final href = _currentRelUrl.isNotEmpty
-        ? _currentRelUrl
-        : _currentUrl;
-    final shareUrl = 'https://buddhaword-web.hf.space/uttayarndham/read?url=${Uri.encodeQueryComponent(href)}';
+    final href = _currentRelUrl.isNotEmpty ? _currentRelUrl : _currentUrl;
+    final shareUrl =
+        'https://buddhaword-web.hf.space/uttayarndham/read?url=${Uri.encodeQueryComponent(href)}';
     Share.share('$_currentTitle\n$shareUrl', subject: _currentTitle);
   }
 
@@ -319,7 +446,9 @@ class _UttayarndhamContentPageState
         'id': identifier,
         'title': _currentTitle,
         'audio': '/',
-        'details': _htmlContent != null ? _extractPlainText(_htmlContent!) : _currentUrl,
+        'details': _htmlContent != null
+            ? _extractPlainText(_htmlContent!)
+            : _currentUrl,
         'category': 'uttayarndham',
         'image': '',
       });
@@ -408,13 +537,19 @@ class _UttayarndhamContentPageState
 
     _playerStateSubscription = _player.playerStateStream.listen((state) {
       if (!mounted) return;
-      setState(() { _isPlaying = state.playing; });
+      setState(() {
+        _isPlaying = state.playing;
+      });
       if (state.processingState == ProcessingState.completed && _ttsActive) {
         _advanceToNextChunk();
       }
     });
     _durationSubscription = _player.durationStream.listen((duration) {
-      if (mounted) setState(() { _duration = duration ?? Duration.zero; });
+      if (mounted) {
+        setState(() {
+          _duration = duration ?? Duration.zero;
+        });
+      }
     });
     _positionSubscription = _player.positionStream.listen((position) {
       if (mounted) {
@@ -430,7 +565,10 @@ class _UttayarndhamContentPageState
     _ttsChunkIndex++;
     if (_ttsChunkIndex >= _ttsChunks.length) {
       if (mounted) {
-        setState(() { _ttsActive = false; _isPlaying = false; });
+        setState(() {
+          _ttsActive = false;
+          _isPlaying = false;
+        });
       }
       return;
     }
@@ -439,12 +577,16 @@ class _UttayarndhamContentPageState
     _nextPrefetchedFile = null;
     if (file == null || !_ttsActive) return;
 
-    file.readAsBytes().then((bytes) { _ttsChunkBytes.add(bytes); });
+    file.readAsBytes().then((bytes) {
+      _ttsChunkBytes.add(bytes);
+    });
     _player.setFilePath(file.path).then((_) {
       _player.setSpeed(0.85);
       _player.play();
     });
-    try { await file.delete(); } catch (_) {}
+    try {
+      await file.delete();
+    } catch (_) {}
     _prefetchChunk(_ttsChunkIndex + 1);
   }
 
@@ -514,16 +656,27 @@ class _UttayarndhamContentPageState
 
     final firstFile = await _fetchTtsChunk(0, _ttsChunks[0]);
     if (firstFile == null || runId != _ttsRunId || !mounted || !_ttsActive) {
-      if (mounted) setState(() { _ttsActive = false; _isTtsLoading = false; });
+      if (mounted) {
+        setState(() {
+          _ttsActive = false;
+          _isTtsLoading = false;
+        });
+      }
       return;
     }
 
-    if (mounted) setState(() { _isTtsLoading = false; });
+    if (mounted) {
+      setState(() {
+        _isTtsLoading = false;
+      });
+    }
     _ttsChunkBytes.add(await firstFile.readAsBytes());
     await _player.setFilePath(firstFile.path);
     await _player.setSpeed(0.85);
     await _player.play();
-    try { await firstFile.delete(); } catch (_) {}
+    try {
+      await firstFile.delete();
+    } catch (_) {}
     _prefetchChunk(1);
   }
 
@@ -547,7 +700,8 @@ class _UttayarndhamContentPageState
   Future<void> _downloadAudio() async {
     if (_ttsChunkBytes.isEmpty) return;
     final dir = await getTemporaryDirectory();
-    final fileName = 'uttayarndham_${DateTime.now().millisecondsSinceEpoch}.mp3';
+    final fileName =
+        'uttayarndham_${DateTime.now().millisecondsSinceEpoch}.mp3';
     final file = File('${dir.path}/$fileName');
     final allBytes = <int>[];
     for (final bytes in _ttsChunkBytes) {
@@ -555,9 +709,9 @@ class _UttayarndhamContentPageState
     }
     await file.writeAsBytes(allBytes);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved: $fileName')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Saved: $fileName')));
     }
   }
 
@@ -575,11 +729,14 @@ class _UttayarndhamContentPageState
     _ttsChunkEnds = [];
     _nextPrefetchedFile = null;
     _pageController.dispose();
+    _tagSearchController.dispose();
+    _contentSearchController.dispose();
     super.dispose();
   }
 
   bool get _hasPrev => widget.items != null && _currentIndex > 0;
-  bool get _hasNext => widget.items != null && _currentIndex < widget.items!.length - 1;
+  bool get _hasNext =>
+      widget.items != null && _currentIndex < widget.items!.length - 1;
 
   bool _isFullScreen = false;
   bool _isFavorited = false;
@@ -587,7 +744,9 @@ class _UttayarndhamContentPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.watch<ThemeProvider>().isDarkMode ? Colors.black : Color.fromRGBO(246, 238, 217, 1.0),
+      backgroundColor: context.watch<ThemeProvider>().isDarkMode
+          ? Colors.black
+          : Color.fromRGBO(246, 238, 217, 1.0),
       drawer: const custom_nav.NavigationDrawer(),
       appBar: _isFullScreen
           ? PreferredSize(
@@ -753,15 +912,166 @@ class _UttayarndhamContentPageState
   }
 
   Widget _buildBody() {
-    if (widget.items != null && widget.items!.length > 1) {
-      return PageView.builder(
-        controller: _pageController,
-        itemCount: widget.items!.length,
-        onPageChanged: _onPageChanged,
-        itemBuilder: (context, index) => _buildItemContent(index),
+    if (widget.tagListing && widget.items != null && widget.items!.isNotEmpty) {
+      return Column(
+        children: [
+          _buildTagItemSearchBar(),
+          Expanded(child: _buildTagItemList()),
+        ],
       );
     }
-    return _buildSingleContent();
+    if (widget.items != null && widget.items!.length > 1) {
+      return Column(
+        children: [
+          _buildContentSearchBar(),
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.items!.length,
+              onPageChanged: _onPageChanged,
+              itemBuilder: (context, index) => _buildItemContent(index),
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        _buildContentSearchBar(),
+        Expanded(child: _buildSingleContent()),
+      ],
+    );
+  }
+
+  Widget _buildTagItemSearchBar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: TextField(
+        controller: _tagSearchController,
+        onChanged: _onTagItemSearch,
+        style: TextStyle(color: isDark ? Colors.grey[100] : Colors.grey[900]),
+        decoration: InputDecoration(
+          hintText: 'Search in ${widget.title}...',
+          hintStyle: TextStyle(
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
+          prefixIcon: Icon(
+            Icons.search,
+            color: isDark ? Colors.brown[200] : Colors.brown,
+          ),
+          suffixIcon: _tagSearchQuery.isNotEmpty
+              ? IconButton(
+                  icon: Icon(
+                    Icons.clear,
+                    color: isDark ? Colors.brown[200] : Colors.brown,
+                  ),
+                  onPressed: () {
+                    _tagSearchController.clear();
+                    _onTagItemSearch('');
+                  },
+                )
+              : null,
+          filled: true,
+          fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContentSearchBar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: TextField(
+        controller: _contentSearchController,
+        onChanged: _onContentSearch,
+        style: TextStyle(color: isDark ? Colors.grey[100] : Colors.grey[900]),
+        decoration: InputDecoration(
+          hintText: 'Search in content...',
+          hintStyle: TextStyle(
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
+          prefixIcon: Icon(
+            Icons.search,
+            color: isDark ? Colors.brown[200] : Colors.brown,
+          ),
+          suffixIcon: _contentSearchQuery.isNotEmpty
+              ? IconButton(
+                  icon: Icon(
+                    Icons.clear,
+                    color: isDark ? Colors.brown[200] : Colors.brown,
+                  ),
+                  onPressed: () {
+                    _contentSearchController.clear();
+                    _onContentSearch('');
+                  },
+                )
+              : null,
+          filled: true,
+          fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTagItemList() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final items = _tagSearchQuery.isEmpty
+        ? (widget.items ?? [])
+        : _filteredTagItems;
+    if (items.isEmpty) {
+      return Center(child: Text('No matching items'));
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: items.length,
+      separatorBuilder: (_, _) => Divider(height: 1),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return ListTile(
+          leading: Icon(Icons.article, color: Colors.brown, size: 20),
+          title: RichText(
+            text: TextSpan(
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.grey[100] : Colors.grey[900],
+              ),
+              children: _highlightText(item.title, _tagSearchQuery),
+            ),
+          ),
+          trailing: Icon(Icons.chevron_right, color: Colors.brown, size: 20),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => UttayarndhamContentPage(
+                  title: item.title,
+                  contentUrl: item.url.startsWith('http')
+                      ? item.url
+                      : 'https://uttayarndham.org${item.url}',
+                  items: null,
+                  itemIndex: 0,
+                  searchQuery: _tagSearchQuery,
+                  tagListing: false,
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildSingleContent() {
@@ -788,7 +1098,9 @@ class _UttayarndhamContentPageState
     final cached = _contentCache[index];
     if (cached != null) {
       final paragraphs = _extractParagraphs(cached);
-      if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
+      if (paragraphs.isEmpty) {
+        return const Center(child: Text('No text content'));
+      }
       return _buildParagraphsView(paragraphs);
     }
     if (index == _currentIndex) {
@@ -807,7 +1119,9 @@ class _UttayarndhamContentPageState
       }
       if (_htmlContent != null) {
         final paragraphs = _extractParagraphs(_htmlContent!);
-        if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
+        if (paragraphs.isEmpty) {
+          return const Center(child: Text('No text content'));
+        }
         return _buildParagraphsView(paragraphs);
       }
     }
@@ -818,7 +1132,10 @@ class _UttayarndhamContentPageState
     final ranges = <_WordRange>[];
     int start = -1;
     for (int i = 0; i < text.length; i++) {
-      if (text[i] == ' ' || text[i] == '\n' || text[i] == '\t' || text[i] == '\r') {
+      if (text[i] == ' ' ||
+          text[i] == '\n' ||
+          text[i] == '\t' ||
+          text[i] == '\r') {
         if (start >= 0) {
           ranges.add(_WordRange(start, i));
           start = -1;
@@ -840,7 +1157,8 @@ class _UttayarndhamContentPageState
     final chunkEnd = _ttsChunkIndex < _ttsChunkEnds.length
         ? _ttsChunkEnds[_ttsChunkIndex]
         : _ttsWords.last.end;
-    final chunkStart = _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
+    final chunkStart =
+        _ttsChunkIndex > 0 && _ttsChunkIndex <= _ttsChunkEnds.length
         ? _ttsChunkEnds[_ttsChunkIndex - 1]
         : 0;
     final chunkLength = chunkEnd - chunkStart;
@@ -878,29 +1196,91 @@ class _UttayarndhamContentPageState
       }
       final wordText = text.substring(localStart, localEnd);
       final isCurrent = i == _ttsCurrentWordIndex;
-      spans.add(TextSpan(
-        text: wordText,
-        style: TextStyle(
-          backgroundColor: isCurrent ? Colors.yellow : null,
-          color: isCurrent && context.read<ThemeProvider>().isDarkMode ? Colors.black : null,
-          fontWeight: isCurrent ? FontWeight.bold : null,
+      spans.add(
+        TextSpan(
+          text: wordText,
+          style: TextStyle(
+            backgroundColor: isCurrent ? Colors.yellow : null,
+            color: isCurrent && context.read<ThemeProvider>().isDarkMode
+                ? Colors.black
+                : null,
+            fontWeight: isCurrent ? FontWeight.bold : null,
+          ),
         ),
-      ));
+      );
       lastEnd = localEnd;
     }
     if (lastEnd < text.length) {
       spans.add(TextSpan(text: text.substring(lastEnd)));
     }
-    return SelectableText.rich(
-      TextSpan(children: spans),
-      showCursor: true,
+    return SelectableText.rich(TextSpan(children: spans), showCursor: true);
+  }
+
+  Widget _buildMediaPlayer() {
+    if (_mediaItems.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.brown.shade200),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final item in _mediaItems) ...[
+            if (item.type == _MediaType.audio) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                color: Colors.brown.shade50,
+                child: Row(
+                  children: [
+                    Icon(Icons.audiotrack, size: 16, color: Colors.brown),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Audio',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.brown.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: double.infinity,
+                height: 166,
+                child: InAppWebView(
+                  initialUrlRequest: URLRequest(url: WebUri(item.embedUrl!)),
+                  initialOptions: InAppWebViewGroupOptions(
+                    crossPlatform: InAppWebViewOptions(
+                      javaScriptEnabled: true,
+                      mediaPlaybackRequiresUserGesture: false,
+                    ),
+                  ),
+                ),
+              ),
+            ] else ...[
+              _YoutubePlayerWidget(videoId: item.videoId!),
+            ],
+          ],
+        ],
+      ),
     );
   }
 
   Widget _buildParagraphsView(List<String> paragraphs) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: paragraphs.asMap().entries.map((entry) {
+    final children = <Widget>[];
+    if (_mediaItems.isNotEmpty) {
+      children.add(_buildMediaPlayer());
+    }
+    children.addAll(
+      paragraphs.asMap().entries.map((entry) {
         final i = entry.key;
         final text = entry.value;
         final isHeading = text.length < 60;
@@ -921,6 +1301,7 @@ class _UttayarndhamContentPageState
         );
       }).toList(),
     );
+    return ListView(padding: const EdgeInsets.all(16), children: children);
   }
 
   Widget _buildTtsBar() {
@@ -946,8 +1327,14 @@ class _UttayarndhamContentPageState
           Expanded(
             child: Slider(
               min: 0,
-              max: _duration.inMilliseconds.toDouble().clamp(1, double.infinity),
-              value: _position.inMilliseconds.toDouble().clamp(0, _duration.inMilliseconds.toDouble()),
+              max: _duration.inMilliseconds.toDouble().clamp(
+                1,
+                double.infinity,
+              ),
+              value: _position.inMilliseconds.toDouble().clamp(
+                0,
+                _duration.inMilliseconds.toDouble(),
+              ),
               onChanged: (v) => _player.seek(Duration(milliseconds: v.toInt())),
             ),
           ),
@@ -994,9 +1381,7 @@ class _UttayarndhamContentPageState
       child: FloatingActionButton(
         heroTag: 'fab_volume',
         onPressed: _speakContent,
-        backgroundColor: _ttsActive
-            ? Colors.brown
-            : const Color(0xFFF5F5F5),
+        backgroundColor: _ttsActive ? Colors.brown : const Color(0xFFF5F5F5),
         child: _isTtsLoading
             ? SizedBox(
                 width: 20,
@@ -1045,11 +1430,8 @@ class _UttayarndhamContentPageState
     return '${d.inHours > 0 ? '${d.inHours}:' : ''}$m:$s';
   }
 
-  TextSpan _buildHighlightedSpan(String text) {
-    final query = widget.searchQuery;
-    if (query.isEmpty) {
-      return TextSpan(text: text);
-    }
+  List<TextSpan> _highlightText(String text, String query) {
+    if (query.isEmpty) return [TextSpan(text: text)];
     final spans = <TextSpan>[];
     final lower = text.toLowerCase();
     final qLower = query.toLowerCase();
@@ -1059,21 +1441,69 @@ class _UttayarndhamContentPageState
       if (idx > start) {
         spans.add(TextSpan(text: text.substring(start, idx)));
       }
-      spans.add(TextSpan(
-        text: text.substring(idx, idx + query.length),
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.orange.shade800,
-          backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+      spans.add(
+        TextSpan(
+          text: text.substring(idx, idx + query.length),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.orange.shade800,
+            backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+          ),
         ),
-      ));
+      );
       start = idx + query.length;
       idx = lower.indexOf(qLower, start);
     }
     if (start < text.length) {
       spans.add(TextSpan(text: text.substring(start)));
     }
-    return TextSpan(children: spans);
+    return spans;
+  }
+
+  TextSpan _buildHighlightedSpan(String text) {
+    final query = _contentSearchQuery.isNotEmpty
+        ? _contentSearchQuery
+        : widget.searchQuery;
+    if (query.isEmpty) {
+      return TextSpan(text: text);
+    }
+    return TextSpan(children: _highlightText(text, query));
+  }
+}
+
+class _YoutubePlayerWidget extends StatefulWidget {
+  final String videoId;
+  const _YoutubePlayerWidget({required this.videoId});
+
+  @override
+  _YoutubePlayerWidgetState createState() => _YoutubePlayerWidgetState();
+}
+
+class _YoutubePlayerWidgetState extends State<_YoutubePlayerWidget> {
+  late YoutubePlayerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = YoutubePlayerController.fromVideoId(
+      videoId: widget.videoId,
+      autoPlay: false,
+      params: const YoutubePlayerParams(
+        showControls: true,
+        showFullscreenButton: true,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return YoutubePlayer(controller: _controller, aspectRatio: 16 / 9);
   }
 }
 
@@ -1081,4 +1511,14 @@ class _WordRange {
   final int start;
   final int end;
   _WordRange(this.start, this.end);
+}
+
+enum _MediaType { audio, video }
+
+class _MediaItem {
+  final String url;
+  final _MediaType type;
+  final String? embedUrl;
+  final String? videoId;
+  _MediaItem(this.url, this.type, {this.embedUrl, this.videoId});
 }

@@ -128,6 +128,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
       if (_currentPage > 1) {
         _currentPage--;
       }
+      _currentTitle = 'เล่มที่ $_currentVolume หน้า $_currentPage';
     });
     _fetchContent();
     _loadFavoriteState();
@@ -137,6 +138,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
     _stopTts();
     setState(() {
       _currentPage++;
+      _currentTitle = 'เล่มที่ $_currentVolume หน้า $_currentPage';
     });
     _fetchContent();
     _loadFavoriteState();
@@ -182,7 +184,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
   Future<void> _loadFavoriteState() async {
     final prefs = await SharedPreferences.getInstance();
     final favorites = prefs.getStringList('favorites') ?? [];
-    final identifier = '${widget.code}_v${widget.volume}_p${widget.page}';
+    final identifier = '${_currentCode}_v${_currentVolume}_p$_currentPage';
     if (!mounted) return;
     setState(() {
       _isFavorited = favorites.any((fav) {
@@ -198,7 +200,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
 
   Future<void> _toggleFavorite() async {
     final prefs = await SharedPreferences.getInstance();
-    final identifier = '${widget.code}_v${widget.volume}_p${widget.page}';
+    final identifier = '${_currentCode}_v${_currentVolume}_p$_currentPage';
     final favorites = List<String>.from(prefs.getStringList('favorites') ?? []);
 
     if (_isFavorited) {
