@@ -21,14 +21,36 @@ class _Category {
 }
 
 const List<_Category> _categories = [
-  _Category('Sutta', 'http://anakame.com/page/1_Sutas/main/1_Sutta.htm', Icons.menu_book, '1. Suttas collection'),
-  _Category('Sutta Set', 'http://anakame.com/page/4_Suta_Set/Main/Main_Set01.htm', Icons.library_books, '4. Sutta Sets'),
-  _Category('Short Sutta', 'http://anakame.com/page/4_Short_Sutta.htm', Icons.auto_stories, '4. Short Suttas'),
-  _Category('Graphic', 'http://anakame.com/page/3_Graphic.htm', Icons.image, '3. Graphics & Infographics'),
-  _Category('Video', 'http://anakame.com/page/ClipVDO/Clip_VDO_01_Highlight.htm', Icons.videocam, 'Clip Video Highlights'),
-  _Category('Book', 'http://anakame.com/page/6_Book.htm', Icons.book, '6. Books'),
-  _Category('Person', 'http://anakame.com/page/7_person.htm', Icons.person, '7. Persons'),
-  _Category('Misc', 'http://anakame.com/page/8_Misc.htm', Icons.category, '8. Miscellaneous'),
+  _Category(
+    'Sutta',
+    'http://anakame.com/page/1_Sutas/main/1_Sutta.htm',
+    Icons.menu_book,
+    '1. Suttas collection',
+  ),
+  _Category(
+    'Sutta Set',
+    'http://anakame.com/page/4_Suta_Set/Main/Main_Set01.htm',
+    Icons.library_books,
+    '4. Sutta Sets',
+  ),
+  _Category(
+    'Short Sutta',
+    'http://anakame.com/page/4_Short_Sutta.htm',
+    Icons.auto_stories,
+    '4. Short Suttas',
+  ),
+  _Category(
+    'Person',
+    'http://anakame.com/page/7_person.htm',
+    Icons.person,
+    '7. Persons',
+  ),
+  _Category(
+    'Misc',
+    'http://anakame.com/page/8_Misc.htm',
+    Icons.category,
+    '8. Miscellaneous',
+  ),
 ];
 
 class AnakameSutraPage extends StatefulWidget {
