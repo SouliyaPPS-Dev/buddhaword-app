@@ -46,6 +46,9 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
+  Timer? _searchDebounce;
+  bool _isContentSearching = false;
+  final Set<String> _contentMatchedTagUrls = {};
 
   bool _isOffline = false;
   StreamSubscription? _connectivitySubscription;
@@ -62,6 +65,7 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _connectivitySubscription?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
@@ -160,17 +164,66 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
       _filteredTags = List.from(_allTags);
     } else {
       final lower = _searchQuery.toLowerCase();
-      _filteredTags = _allTags
-          .where((tag) => tag.name.toLowerCase().contains(lower))
-          .toList();
+      _filteredTags = _allTags.where((tag) {
+        if (tag.name.toLowerCase().contains(lower)) return true;
+        if (_contentMatchedTagUrls.contains(tag.url)) return true;
+        return false;
+      }).toList();
     }
   }
 
   void _onSearch(String query) {
+    _searchDebounce?.cancel();
     setState(() {
       _searchQuery = query;
       _applySearch();
+      _isContentSearching = false;
     });
+    if (query.length >= 2) {
+      _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+        _searchContent(query);
+      });
+    }
+  }
+
+  Future<void> _searchContent(String query) async {
+    if (query.length < 2) return;
+    final q = query.toLowerCase();
+    final candidates = _allTags.where((tag) {
+      if (tag.name.toLowerCase().contains(q)) return false;
+      if (_contentMatchedTagUrls.contains(tag.url)) return false;
+      return true;
+    }).take(8).toList();
+
+    if (candidates.isEmpty) return;
+
+    setState(() => _isContentSearching = true);
+
+    final matched = <String>{};
+    for (final tag in candidates) {
+      try {
+        final response = await http.get(
+          Uri.parse('$_baseUrl${tag.url}'),
+          headers: {'User-Agent': 'Mozilla/5.0'},
+        );
+        if (response.statusCode != 200) continue;
+        final items = _parseTagPageItems(response.body);
+        for (final item in items) {
+          if (item.title.toLowerCase().contains(q)) {
+            matched.add(tag.url);
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      setState(() {
+        _contentMatchedTagUrls.addAll(matched);
+        _applySearch();
+        _isContentSearching = false;
+      });
+    }
   }
 
   void _onTagSelected(_Tag tag) async {
@@ -302,6 +355,24 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
         children: [
           _buildOfflineBanner(),
           _buildSearchBar(),
+          if (_isContentSearching)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.5),
+                  ),
+                  SizedBox(width: 6),
+                  Text(
+                    'Searching in content...',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
           Expanded(child: _buildBody()),
         ],
       ),

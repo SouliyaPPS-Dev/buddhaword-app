@@ -464,56 +464,76 @@ class _SearchPageState extends State<SearchPage> {
 
     if (_selectedSource == 'anakame' || _selectedSource == 'all') {
       try {
-        const listingUrl =
-            'http://anakame.com/page/1_Sutas/main/1_Sutta_number.htm';
-        final listingResponse = await http.get(
-          Uri.parse(listingUrl),
-          headers: {'User-Agent': 'Mozilla/5.0'},
-        );
-        if (listingResponse.statusCode == 200) {
-          final decoded = utf8.decode(listingResponse.bodyBytes);
-          final items = _parseAnakameListing(decoded);
-          final q = query.toLowerCase();
-          int contentFetches = 0;
-          for (final item in items) {
-            if (item['title'].toString().toLowerCase().contains(q)) {
-              String snippet = item['number'];
-              if (contentFetches < 5) {
-                try {
-                  final contentUrl = item['url'].toString().startsWith('http')
-                      ? item['url'].toString()
-                      : Uri.parse(listingUrl).resolve(item['url']).toString();
-                  final contentRes = await http.get(
-                    Uri.parse(contentUrl),
-                    headers: {'User-Agent': 'Mozilla/5.0'},
-                  );
-                  if (contentRes.statusCode == 200) {
-                    final text = utf8
-                        .decode(contentRes.bodyBytes)
-                        .replaceAll(RegExp(r'<[^>]*>'), ' ')
-                        .replaceAll(RegExp(r'\s+'), ' ')
-                        .trim();
-                    snippet = text.length > 100
-                        ? '${text.substring(0, 100)}...'
-                        : text;
-                  }
-                } catch (_) {}
-                contentFetches++;
+        const anakameEndpoints = [
+          'http://anakame.com/page/1_Sutas/main/1_Sutta.htm',
+          'http://anakame.com/page/4_Suta_Set/Main/Main_Set01.htm',
+          'http://anakame.com/page/4_Short_Sutta.htm',
+          'http://anakame.com/page/7_person.htm',
+          'http://anakame.com/page/8_Misc.htm',
+        ];
+        final q = query.toLowerCase();
+        final seenUrls = <String>{};
+        final contentCandidates = <Map<String, dynamic>>[];
+        for (final endpoint in anakameEndpoints) {
+          try {
+            final res = await http.get(
+              Uri.parse(endpoint),
+              headers: {'User-Agent': 'Mozilla/5.0'},
+            );
+            if (res.statusCode != 200) continue;
+            final decoded = utf8.decode(res.bodyBytes);
+            final items = _parseAnakameListing(decoded, endpoint);
+            for (final item in items) {
+              final title = item['title'] as String;
+              final url = item['url'] as String;
+              if (!seenUrls.add(url)) continue;
+              if (title.toLowerCase().contains(q)) {
+                results.add({
+                  'source': 'anakame',
+                  'sourceLabel': 'Anakame',
+                  'title': title,
+                  'subtitle': '',
+                  'payload': {
+                    'contentUrl': url,
+                    'title': 'Anakame',
+                  },
+                });
+              } else if (contentCandidates.length < 10) {
+                contentCandidates.add(item);
               }
+            }
+          } catch (_) {}
+        }
+        // Search content of non-title-matching items
+        for (final item in contentCandidates) {
+          try {
+            final contentUrl = item['url'] as String;
+            final contentRes = await http.get(
+              Uri.parse(contentUrl),
+              headers: {'User-Agent': 'Mozilla/5.0'},
+            );
+            if (contentRes.statusCode != 200) continue;
+            final text = utf8.decode(contentRes.bodyBytes)
+                .replaceAll(RegExp(r'<script[^>]*>.*?</script>', dotAll: true), '')
+                .replaceAll(RegExp(r'<style[^>]*>.*?</style>', dotAll: true), '')
+                .replaceAll(RegExp(r'<[^>]*>'), ' ')
+                .replaceAll(RegExp(r'\s+'), ' ')
+                .trim();
+            if (text.toLowerCase().contains(q)) {
               results.add({
                 'source': 'anakame',
                 'sourceLabel': 'Anakame',
                 'title': item['title'],
-                'subtitle': snippet,
+                'subtitle': text.length > 100
+                    ? '${text.substring(0, 100)}...'
+                    : text,
                 'payload': {
-                  'contentUrl': item['url'].toString().startsWith('http')
-                      ? item['url'].toString()
-                      : Uri.parse(listingUrl).resolve(item['url']).toString(),
+                  'contentUrl': contentUrl,
                   'title': 'Anakame',
                 },
               });
             }
-          }
+          } catch (_) {}
         }
       } catch (e) {
         if (kDebugMode) print('Anakame search error: $e');
@@ -522,33 +542,108 @@ class _SearchPageState extends State<SearchPage> {
 
     if (_selectedSource == 'uttayarndham' || _selectedSource == 'all') {
       try {
-        final Set<String> seenUrls = {};
+        const baseUrl = 'https://uttayarndham.org';
+        final q = query.toLowerCase();
+        final seenItemUrls = <String>{};
+
+        // Fetch tags from keyword/tags paginated endpoint
+        final allTags = <Map<String, String>>[];
         for (int page = 0; page <= 3; page++) {
-          final url = page == 0
-              ? 'https://uttayarndham.org/dhamma-sharing'
-              : 'https://uttayarndham.org/dhamma-sharing?page=$page';
-          final response = await http.get(
-            Uri.parse(url),
-            headers: {'User-Agent': 'Mozilla/5.0'},
-          );
-          if (response.statusCode == 200) {
-            final items = _parseUttayarndhamListing(response.body);
-            final q = query.toLowerCase();
-            for (final item in items) {
-              final itemUrl = item['url'] as String;
-              if (item['title'].toString().toLowerCase().contains(q) && seenUrls.add(itemUrl)) {
+          try {
+            final tagUrl = '$baseUrl/keyword/tags${page > 0 ? '?page=$page' : ''}';
+            final tagRes = await http.get(Uri.parse(tagUrl));
+            if (tagRes.statusCode != 200) break;
+            final tagMatches = RegExp(
+              r'<a\s+href="(/taxonomy/term/\d+)"[^>]*>\s*([^<]+?)\s*</a>',
+              dotAll: true,
+            ).allMatches(tagRes.body);
+            int count = 0;
+            for (final m in tagMatches) {
+              allTags.add({'url': m.group(1)!.trim(), 'name': m.group(2)!.trim()});
+              count++;
+            }
+            if (count == 0) break;
+          } catch (_) {
+            break;
+          }
+        }
+
+        // Split into name-matching and non-matching tags
+        final nameMatching = allTags
+            .where((t) => t['name']!.toLowerCase().contains(q))
+            .take(8)
+            .toList();
+        final contentCandidates = allTags
+            .where((t) => !t['name']!.toLowerCase().contains(q))
+            .take(5)
+            .toList();
+
+        // Fetch items from name-matching tags
+        for (final tag in nameMatching) {
+          try {
+            final itemRes = await http.get(Uri.parse('$baseUrl${tag['url']}'));
+            if (itemRes.statusCode != 200) continue;
+            final itemMatches = RegExp(
+              r'<h4[^>]*>.*?<a\s+href="\s*([^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
+              dotAll: true,
+            ).allMatches(itemRes.body);
+            for (final m in itemMatches) {
+              final itemUrl = m.group(1)!.trim();
+              final itemTitle = m.group(2)!.trim();
+              final normalized = itemUrl.startsWith('http')
+                  ? Uri.parse(itemUrl).path
+                  : itemUrl;
+              if (itemTitle.isNotEmpty && seenItemUrls.add(normalized)) {
                 results.add({
                   'source': 'uttayarndham',
                   'sourceLabel': 'Uttayarndham',
-                  'title': item['title'],
+                  'title': itemTitle,
+                  'subtitle': tag['name'],
                   'payload': {
-                    'contentUrl': itemUrl.startsWith('http') ? itemUrl : 'https://uttayarndham.org$itemUrl',
+                    'contentUrl': normalized.startsWith('http')
+                        ? normalized
+                        : '$baseUrl$normalized',
                     'title': 'Uttayarndham',
                   },
                 });
               }
             }
-          }
+          } catch (_) {}
+        }
+
+        // Fetch items from non-matching tags and check item titles for query
+        for (final tag in contentCandidates) {
+          try {
+            final itemRes = await http.get(Uri.parse('$baseUrl${tag['url']}'));
+            if (itemRes.statusCode != 200) continue;
+            final itemMatches = RegExp(
+              r'<h4[^>]*>.*?<a\s+href="\s*([^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
+              dotAll: true,
+            ).allMatches(itemRes.body);
+            for (final m in itemMatches) {
+              final itemUrl = m.group(1)!.trim();
+              final itemTitle = m.group(2)!.trim();
+              final normalized = itemUrl.startsWith('http')
+                  ? Uri.parse(itemUrl).path
+                  : itemUrl;
+              if (itemTitle.isNotEmpty &&
+                  itemTitle.toLowerCase().contains(q) &&
+                  seenItemUrls.add(normalized)) {
+                results.add({
+                  'source': 'uttayarndham',
+                  'sourceLabel': 'Uttayarndham',
+                  'title': itemTitle,
+                  'subtitle': tag['name'],
+                  'payload': {
+                    'contentUrl': normalized.startsWith('http')
+                        ? normalized
+                        : '$baseUrl$normalized',
+                    'title': 'Uttayarndham',
+                  },
+                });
+              }
+            }
+          } catch (_) {}
         }
       } catch (e) {
         if (kDebugMode) print('Uttayarndham search error: $e');
@@ -586,64 +681,29 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
-  List<Map<String, dynamic>> _parseAnakameListing(String html) {
+  List<Map<String, dynamic>> _parseAnakameListing(String html, String baseUrl) {
     final items = <Map<String, dynamic>>[];
-    final tdRegex = RegExp(r'<td[^>]*>(.*?)</td>', dotAll: true);
-    final linkRegex = RegExp(
-      r'<a\s+href="([^"]*)"[^>]*>(.*?)</a>',
+    final seen = <String>{};
+    for (final m in RegExp(
+      r'<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
       dotAll: true,
-    );
-    final rows = RegExp(r'<tr>(.*?)</tr>', dotAll: true).allMatches(html);
-    for (final row in rows) {
-      final tds = tdRegex.allMatches(row.group(1)!).toList();
-      if (tds.length < 2) continue;
-      final number = tds[0].group(1)!.replaceAll(RegExp(r'<[^>]*>'), '').trim();
-      if (number.isEmpty ||
-          int.tryParse(number.replaceAll(RegExp(r'[^0-9]'), '')) == null &&
-              !number.startsWith(RegExp(r'[BS]'))) {
-        continue;
-      }
-      final linkMatch = linkRegex.firstMatch(tds[1].group(1)!);
-      if (linkMatch != null) {
-        final href = linkMatch.group(1)!;
-        if (!href.contains('.htm')) continue;
-        items.add({
-          'number': number,
-          'title': linkMatch
-              .group(2)!
-              .replaceAll(RegExp(r'<[^>]*>'), '')
-              .trim(),
-          'url': href,
-        });
-      }
-    }
-    return items;
-  }
-
-  List<Map<String, dynamic>> _parseUttayarndhamListing(String html) {
-    final items = <Map<String, dynamic>>[];
-    final entryRegex = RegExp(
-      r'<h4><a\s+href="\s*(/[^"]+)"[^>]*>\s*([^<]+?)\s*</a></h4>',
-      dotAll: true,
-    );
-    final matches = entryRegex.allMatches(html);
-    for (final m in matches) {
-      items.add({'url': m.group(1)!.trim(), 'title': m.group(2)!.trim()});
-    }
-    if (items.isEmpty) {
-      final fallbackRegex = RegExp(
-        r'<a\s+href="([^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
-        dotAll: true,
-      );
-      final fallbackMatches = fallbackRegex.allMatches(html);
-      for (final m in fallbackMatches) {
-        final url = m.group(1)!.trim();
-        final title = m.group(2)!.trim();
-        if (url.contains('dhamma-sharing') && title.isNotEmpty) {
-          final normalized = url.startsWith('http') ? Uri.parse(url).path : url;
-          items.add({'url': normalized, 'title': title});
-        }
-      }
+    ).allMatches(html)) {
+      final href = m.group(1)!.trim();
+      final inner = m.group(2)!.trim();
+      if (inner.contains('<img') || inner.isEmpty) continue;
+      if (href.startsWith('#') || href.startsWith('javascript')) continue;
+      if (href.contains('index.htm') || href.contains('favicon')) continue;
+      if (!href.contains('.htm') && !href.contains('.html')) continue;
+      final title = inner
+          .replaceAll(RegExp(r'<[^>]*>'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (title.isEmpty || title.length < 3) continue;
+      final absUrl = href.startsWith('http')
+          ? href
+          : Uri.parse(baseUrl).resolve(href).toString();
+      if (!seen.add(absUrl)) continue;
+      items.add({'title': title, 'url': absUrl});
     }
     return items;
   }

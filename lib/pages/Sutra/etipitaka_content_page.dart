@@ -105,7 +105,7 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
 
       if (mounted) {
         setState(() {
-          _plainText = content;
+          _plainText = content != null ? _cleanText(content) : null;
           _isLoading = false;
           if (content == null) {
             _error = 'Content not found';
@@ -142,6 +142,31 @@ class EtipitakaContentPageState extends State<EtipitakaContentPage> {
     });
     _fetchContent();
     _loadFavoriteState();
+  }
+
+  String _cleanText(String text) {
+    final buf = StringBuffer();
+    for (final r in text.runes) {
+      if (r == 0x09 || r == 0x0A || r == 0x0D) {
+        buf.writeCharCode(r);
+        continue;
+      }
+      if (r <= 0x1F || (r >= 0x7F && r <= 0x9F)) continue;
+      if (r == 0x00AD || r == 0x200B || r == 0x200C || r == 0x200D || r == 0xFEFF) continue;
+      if (r == 0x0E3F || (r >= 0x0E01 && r <= 0x0E3A) || (r >= 0x0E40 && r <= 0x0E5B) || (r >= 0x0E50 && r <= 0x0E59)) {
+        buf.writeCharCode(r);
+        continue;
+      }
+      if (r >= 0x20 && r <= 0x7E) {
+        buf.writeCharCode(r);
+        continue;
+      }
+      if (r >= 0x0E00 && r <= 0x0E7F) {
+        buf.writeCharCode(r);
+        continue;
+      }
+    }
+    return buf.toString();
   }
 
   List<String> _extractParagraphs(String text) {

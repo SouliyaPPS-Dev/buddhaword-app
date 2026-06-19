@@ -57,8 +57,10 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   static const int _pageSize = 20;
 
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _contentSearchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
+  String _contentSearchQuery = '';
 
   final AudioPlayer _player = AudioPlayer();
   bool _isPlaying = false;
@@ -320,6 +322,12 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       _categoryDisplayCount = _filteredCategoryItems.length > _pageSize
           ? _pageSize
           : _filteredCategoryItems.length;
+    });
+  }
+
+  void _onContentSearch(String query) {
+    setState(() {
+      _contentSearchQuery = query;
     });
   }
 
@@ -746,6 +754,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     _connectivitySubscription?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
+    _contentSearchController.dispose();
     _player.stop();
     _playerStateSubscription?.cancel();
     _durationSubscription?.cancel();
@@ -1078,7 +1087,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     if (_htmlContent == null) return const Center(child: Text('No content'));
     final paragraphs = _extractParagraphs(_htmlContent!);
     if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
-    return _buildParagraphsView(paragraphs);
+    return _buildContentWithSearch(paragraphs);
   }
 
   Widget _buildItemContent(int index) {
@@ -1086,7 +1095,7 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
     if (cached != null) {
       final paragraphs = _extractParagraphs(cached);
       if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
-      return _buildParagraphsView(paragraphs);
+      return _buildContentWithSearch(paragraphs);
     }
     if (index == _currentIndex) {
       if (_isLoading) return const Center(child: CircularProgressIndicator());
@@ -1105,10 +1114,76 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       if (_htmlContent != null) {
         final paragraphs = _extractParagraphs(_htmlContent!);
         if (paragraphs.isEmpty) return const Center(child: Text('No text content'));
-        return _buildParagraphsView(paragraphs);
+        return _buildContentWithSearch(paragraphs);
       }
     }
     return const Center(child: CircularProgressIndicator());
+  }
+
+  Widget _buildContentWithSearch(List<String> paragraphs) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    List<String> displayParagraphs = paragraphs;
+    int matchCount = 0;
+    if (_contentSearchQuery.isNotEmpty) {
+      final lower = _contentSearchQuery.toLowerCase();
+      displayParagraphs = paragraphs.where((p) {
+        final contains = p.toLowerCase().contains(lower);
+        if (contains) matchCount++;
+        return contains;
+      }).toList();
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: TextField(
+            controller: _contentSearchController,
+            onChanged: _onContentSearch,
+            style: TextStyle(color: isDark ? Colors.grey[100] : Colors.grey[900], fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'Search in content...',
+              hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600], fontSize: 14),
+              prefixIcon: Icon(Icons.search, size: 20, color: isDark ? Colors.brown[200] : Colors.brown),
+              suffixIcon: _contentSearchQuery.isNotEmpty
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$matchCount match${matchCount != 1 ? 'es' : ''}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.clear, size: 18, color: isDark ? Colors.brown[200] : Colors.brown),
+                          onPressed: () {
+                            _contentSearchController.clear();
+                            _onContentSearch('');
+                          },
+                        ),
+                      ],
+                    )
+                  : null,
+              filled: true,
+              fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+            ),
+          ),
+        ),
+        Expanded(
+          child: displayParagraphs.isEmpty
+              ? Center(child: Text('No matches found'))
+              : _buildParagraphsView(displayParagraphs),
+        ),
+      ],
+    );
   }
 
   List<_WordRange> _buildWordRanges(String text) {
@@ -1382,11 +1457,13 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   }
 
   TextSpan _buildHighlightedSpan(String text) {
-    final query = widget.searchQuery;
-    if (query.isEmpty) {
+    final activeQuery = _contentSearchQuery.isNotEmpty
+        ? _contentSearchQuery
+        : widget.searchQuery;
+    if (activeQuery.isEmpty) {
       return TextSpan(text: text);
     }
-    return TextSpan(children: _highlightText(text, query));
+    return TextSpan(children: _highlightText(text, activeQuery));
   }
 }
 
