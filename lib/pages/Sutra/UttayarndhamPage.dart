@@ -1,7 +1,6 @@
 // ignore_for_file: file_names, library_private_types_in_public_api, prefer_const_constructors, deprecated_member_use
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -34,7 +33,6 @@ class UttayarndhamPage extends StatefulWidget {
 
 class _UttayarndhamPageState extends State<UttayarndhamPage> {
   static const String _baseUrl = 'https://uttayarndham.org';
-  static const String _apiBase = 'https://buddhaword-web.hf.space';
 
   List<_Tag> _allTags = [];
   List<_Tag> _filteredTags = [];
@@ -60,8 +58,12 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _fetchPage(0);
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
-      if (mounted) setState(() => _isOffline = results.contains(ConnectivityResult.none));
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) {
+      if (mounted) {
+        setState(() => _isOffline = results.contains(ConnectivityResult.none));
+      }
     });
   }
 
@@ -132,7 +134,9 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          if (!_isOffline) _error = 'ການໂຫຼດຂໍ້ມູນລົ້ມເຫຼວ (ກະລຸນາກວດສອບການເຊື່ອມຕໍ່)';
+          if (!_isOffline) {
+            _error = 'ການໂຫຼດຂໍ້ມູນລົ້ມເຫຼວ (ກະລຸນາກວດສອບການເຊື່ອມຕໍ່)';
+          }
           _isLoading = false;
           _isLoadingMore = false;
         });
@@ -191,11 +195,14 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
   Future<void> _searchContent(String query) async {
     if (query.length < 2) return;
     final q = query.toLowerCase();
-    final candidates = _allTags.where((tag) {
-      if (tag.name.toLowerCase().contains(q)) return false;
-      if (_contentMatchedTagUrls.contains(tag.url)) return false;
-      return true;
-    }).take(8).toList();
+    final candidates = _allTags
+        .where((tag) {
+          if (tag.name.toLowerCase().contains(q)) return false;
+          if (_contentMatchedTagUrls.contains(tag.url)) return false;
+          return true;
+        })
+        .take(8)
+        .toList();
 
     if (candidates.isEmpty) return;
 
@@ -204,14 +211,17 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
     final matched = <String>{};
     for (final tag in candidates) {
       try {
-        final uri = Uri.parse('$_apiBase/api/uttayarndham/content')
-            .replace(queryParameters: {'url': tag.url});
-        final response = await http.get(uri);
+        final response = await http.get(
+          Uri.parse('$_baseUrl${tag.url}'),
+          headers: {'User-Agent': 'Mozilla/5.0'},
+        );
         if (response.statusCode != 200) continue;
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        final content = data['content'] as String? ?? '';
-        if (content.toLowerCase().contains(q)) {
-          matched.add(tag.url);
+        final items = _parseTagPageItems(response.body);
+        for (final item in items) {
+          if (item.title.toLowerCase().contains(q)) {
+            matched.add(tag.url);
+            break;
+          }
         }
       } catch (_) {}
     }
@@ -227,25 +237,19 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
 
   void _onTagSelected(_Tag tag) async {
     try {
-      final uri = Uri.parse('$_apiBase/api/uttayarndham/content')
-          .replace(queryParameters: {'url': tag.url});
-      final response = await http.get(uri);
+      final response = await http.get(Uri.parse('$_baseUrl${tag.url}'));
       if (response.statusCode == 200) {
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        final content = data['content'] as String? ?? '';
-
-        // Try to parse individual items from content
-        final items = _parseTextItems(content, tag.url);
-        if (mounted) {
+        final items = _parseTagPageItems(response.body);
+        if (items.isNotEmpty && mounted) {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => UttayarndhamContentPage(
                 title: tag.name,
-                contentUrl: items.isNotEmpty
+                contentUrl: items.first.url.startsWith('http')
                     ? items.first.url
-                    : '$_baseUrl${tag.url}',
-                items: items.isNotEmpty ? items : null,
+                    : '$_baseUrl${items.first.url}',
+                items: items,
                 itemIndex: 0,
                 tagListing: true,
               ),
@@ -270,15 +274,22 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
     }
   }
 
-  List<UttayarndhamItem> _parseTextItems(String text, String baseUrl) {
-    final lines = text.split('\n')
-        .map((l) => l.trim())
-        .where((l) => l.length >= 10)
-        .toList();
-    return lines.map((l) => UttayarndhamItem(
-      title: l.length > 80 ? '${l.substring(0, 80)}...' : l,
-      url: baseUrl.startsWith('/') ? '$_baseUrl$baseUrl' : baseUrl,
-    )).toList();
+  List<UttayarndhamItem> _parseTagPageItems(String html) {
+    final results = <UttayarndhamItem>[];
+    final seenUrls = <String>{};
+    final regex = RegExp(
+      r'<h4[^>]*>.*?<a\s+href="\s*([^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
+      dotAll: true,
+    );
+    for (final m in regex.allMatches(html)) {
+      final href = m.group(1)!.trim();
+      final title = m.group(2)!.trim();
+      final normalized = href.startsWith('http') ? Uri.parse(href).path : href;
+      if (title.isNotEmpty && seenUrls.add(normalized)) {
+        results.add(UttayarndhamItem(title: title, url: normalized));
+      }
+    }
+    return results;
   }
 
   List<TextSpan> _highlightText(String text, String query) {
@@ -292,14 +303,16 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
       if (idx > start) {
         spans.add(TextSpan(text: text.substring(start, idx)));
       }
-      spans.add(TextSpan(
-        text: text.substring(idx, idx + query.length),
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.orange.shade800,
-          backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+      spans.add(
+        TextSpan(
+          text: text.substring(idx, idx + query.length),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.orange.shade800,
+            backgroundColor: Colors.yellow.withValues(alpha: 0.3),
+          ),
         ),
-      ));
+      );
       start = idx + query.length;
       idx = lower.indexOf(qLower, start);
     }
@@ -408,11 +421,19 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
         style: TextStyle(color: isDark ? Colors.grey[100] : Colors.grey[900]),
         decoration: InputDecoration(
           hintText: 'Search tags...',
-          hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
-          prefixIcon: Icon(Icons.tag, color: isDark ? Colors.brown[200] : Colors.brown),
+          hintStyle: TextStyle(
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
+          prefixIcon: Icon(
+            Icons.tag,
+            color: isDark ? Colors.brown[200] : Colors.brown,
+          ),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: Icon(Icons.clear, color: isDark ? Colors.brown[200] : Colors.brown),
+                  icon: Icon(
+                    Icons.clear,
+                    color: isDark ? Colors.brown[200] : Colors.brown,
+                  ),
                   onPressed: () {
                     _searchController.clear();
                     _onSearch('');
