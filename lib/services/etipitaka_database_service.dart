@@ -58,6 +58,8 @@ class EtipitakaDatabaseService {
   };
 
   final Map<String, Database> _databases = {};
+  final Map<String, String> _tableNames = {};
+  final Map<String, Map<String, String>> _colMap = {};
   String? _appDir;
 
   Future<String> get _appDocumentsDir async {
@@ -96,6 +98,41 @@ class EtipitakaDatabaseService {
     try {
       final db = await openDatabase(dbPath, readOnly: true);
       _databases[code] = db;
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('android_metadata', 'sqlite_sequence') AND name NOT LIKE 'sqlite_%'",
+      );
+
+      String tableName = 'main';
+      Map<String, String> mapping = {};
+      for (final row in tables) {
+        final name = row['name'] as String;
+        final cols = await db.rawQuery("PRAGMA table_info($name)");
+        final colNames = cols.map((c) => c['name'] as String).toList();
+
+        mapping['content'] = colNames.contains('content') ? 'content' : '';
+        mapping['page'] = colNames.contains('page') ? 'page' : '';
+        if (colNames.contains('volume')) {
+          mapping['volume'] = 'volume';
+        } else if (colNames.contains('book')) {
+          mapping['volume'] = 'book';
+        } else {
+          mapping['volume'] = '';
+        }
+        if (colNames.contains('items')) {
+          mapping['items'] = 'items';
+        } else if (colNames.contains('title')) {
+          mapping['items'] = 'title';
+        } else {
+          mapping['items'] = '';
+        }
+
+        if (mapping['content']!.isNotEmpty) {
+          tableName = name;
+          break;
+        }
+      }
+      _tableNames[code] = tableName;
+      _colMap[code] = mapping;
       return db;
     } catch (e) {
       if (file.existsSync()) {
@@ -111,74 +148,96 @@ class EtipitakaDatabaseService {
   Future<List<EtipitakaSearchResult>> search(
       String code, String query) async {
     final db = await _openDb(code);
+    final table = _tableNames[code] ?? 'main';
+    final map = _colMap[code] ?? <String, String>{};
+
+    final volumeCol = map['volume'] ?? '';
+    final pageCol = map['page'] ?? '';
+    final itemsCol = map['items'] ?? '';
+    final contentCol = map['content'] ?? 'content';
+    final hasVolumeAndPage = volumeCol.isNotEmpty && pageCol.isNotEmpty;
 
     final results = await db.query(
-      'main',
-      where: 'content LIKE ?',
+      table,
+      where: '$contentCol LIKE ?',
       whereArgs: ['%$query%'],
-      orderBy: 'CAST(volume AS INTEGER), CAST(page AS INTEGER)',
+      orderBy: hasVolumeAndPage
+          ? 'CAST($volumeCol AS INTEGER), CAST($pageCol AS INTEGER)'
+          : null,
       limit: _searchResultLimit,
     );
 
     return results.map((row) {
       return EtipitakaSearchResult(
-        volume: int.tryParse(row['volume']?.toString() ?? '') ?? 0,
-        page: int.tryParse(row['page']?.toString() ?? '') ?? 0,
-        items: row['items']?.toString() ?? '',
-        content: row['content']?.toString() ?? '',
+        volume: volumeCol.isNotEmpty
+            ? int.tryParse(row[volumeCol]?.toString() ?? '') ?? 0
+            : 0,
+        page: pageCol.isNotEmpty
+            ? int.tryParse(row[pageCol]?.toString() ?? '') ?? 0
+            : 0,
+        items: itemsCol.isNotEmpty ? row[itemsCol]?.toString() ?? '' : '',
+        content: row[contentCol]?.toString() ?? '',
       );
     }).toList();
   }
 
   Future<String?> getContent(String code, int volume, int page) async {
     final db = await _openDb(code);
+    final table = _tableNames[code] ?? 'main';
+    final map = _colMap[code] ?? <String, String>{};
 
-    final volumeStr = volume.toString().padLeft(2, '0');
-    final pageStr = page.toString().padLeft(4, '0');
+    final volumeCol = map['volume'] ?? '';
+    final pageCol = map['page'] ?? '';
+    final contentCol = map['content'] ?? 'content';
+    if (volumeCol.isEmpty || pageCol.isEmpty) return null;
 
-    final results = await db.query(
-      'main',
-      columns: ['content'],
-      where: 'volume = ? AND page = ?',
-      whereArgs: [volumeStr, pageStr],
-      limit: 1,
+    final results = await db.rawQuery(
+      'SELECT $contentCol FROM $table WHERE CAST($volumeCol AS INTEGER) = ? AND CAST($pageCol AS INTEGER) = ? LIMIT 1',
+      [volume, page],
     );
 
     if (results.isEmpty) return null;
-    return results.first['content']?.toString();
+    return results.first[contentCol]?.toString();
   }
 
   Future<EtipitakaSearchResult?> getByVolumePage(
       String code, int volume, int page) async {
     final db = await _openDb(code);
+    final table = _tableNames[code] ?? 'main';
+    final map = _colMap[code] ?? <String, String>{};
 
-    final volumeStr = volume.toString().padLeft(2, '0');
-    final pageStr = page.toString().padLeft(4, '0');
+    final volumeCol = map['volume'] ?? '';
+    final pageCol = map['page'] ?? '';
+    final itemsCol = map['items'] ?? '';
+    final contentCol = map['content'] ?? 'content';
+    if (volumeCol.isEmpty || pageCol.isEmpty) return null;
 
-    final results = await db.query(
-      'main',
-      where: 'volume = ? AND page = ?',
-      whereArgs: [volumeStr, pageStr],
-      limit: 1,
+    final results = await db.rawQuery(
+      'SELECT * FROM $table WHERE CAST($volumeCol AS INTEGER) = ? AND CAST($pageCol AS INTEGER) = ? LIMIT 1',
+      [volume, page],
     );
 
     if (results.isEmpty) return null;
     final row = results.first;
     return EtipitakaSearchResult(
-      volume: int.tryParse(row['volume']?.toString() ?? '') ?? 0,
-      page: int.tryParse(row['page']?.toString() ?? '') ?? 0,
-      items: row['items']?.toString() ?? '',
-      content: row['content']?.toString() ?? '',
+      volume: int.tryParse(row[volumeCol]?.toString() ?? '') ?? 0,
+      page: int.tryParse(row[pageCol]?.toString() ?? '') ?? 0,
+      items: itemsCol.isNotEmpty ? row[itemsCol]?.toString() ?? '' : '',
+      content: row[contentCol]?.toString() ?? '',
     );
   }
 
   Future<int> getTotalPages(String code, int volume) async {
     final db = await _openDb(code);
+    final table = _tableNames[code] ?? 'main';
+    final map = _colMap[code] ?? <String, String>{};
 
-    final volumeStr = volume.toString().padLeft(2, '0');
+    final volumeCol = map['volume'] ?? '';
+    if (volumeCol.isEmpty) return 0;
+
     final result = await db.rawQuery(
-      'SELECT COUNT(*) as cnt FROM main WHERE volume = ?',
-      [volumeStr],
+      'SELECT COUNT(*) as cnt FROM $table WHERE CAST($volumeCol AS INTEGER) = ?',
+      [volume],
     );
     return result.first['cnt'] as int? ?? 0;
   }

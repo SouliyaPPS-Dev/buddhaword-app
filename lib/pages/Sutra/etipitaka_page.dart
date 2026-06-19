@@ -1,10 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
+import '../../services/etipitaka_database_service.dart';
 import '../../themes/ThemeProvider.dart';
 import 'etipitaka_content_page.dart';
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
@@ -33,34 +32,25 @@ class EtipitakaSearchPage extends StatefulWidget {
 }
 
 class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
-  static const String _apiBase = 'https://buddhaword-web.hf.space';
-
-  static const _allCodes = [
-    _CategoryInfo('thai', 'ไทย (ฉบับหลวง)', Icons.menu_book),
-    _CategoryInfo('pali', 'บาลี (สยามรัฐ)', Icons.menu_book),
-    _CategoryInfo('thaimm', 'ไทย (มหามกุฏฯ)', Icons.language),
-    _CategoryInfo('thaimc', 'ไทย (มหาจุฬาฯ)', Icons.language),
-    _CategoryInfo('thaipb', 'พุทธวจน-หมวดธรรม', Icons.language),
-    _CategoryInfo('thaibt', 'ชุดจากพระโอษฐ์ 5 เล่ม', Icons.language),
-    _CategoryInfo('english', 'English', Icons.language),
-    _CategoryInfo('burma', 'Burma', Icons.language),
-    _CategoryInfo('myan', 'Myanmar', Icons.language),
-    _CategoryInfo('sri', 'Sri Lanka', Icons.language),
-    _CategoryInfo('siam', 'Siam', Icons.language),
-    _CategoryInfo('chinese', 'Chinese', Icons.language),
-    _CategoryInfo('tibetan', 'Tibetan', Icons.language),
-    _CategoryInfo('korean', 'Korean', Icons.language),
-    _CategoryInfo('vietnamese', 'Vietnamese', Icons.language),
-    _CategoryInfo('japanese', 'Japanese', Icons.language),
-    _CategoryInfo('roman', 'Roman', Icons.language),
-  ];
+  final EtipitakaDatabaseService _dbService = EtipitakaDatabaseService();
 
   static const _excludedCodes = {
-    'thaiwn', 'thaict', 'romanct', 'palimc', 'thaims', 'thaivn', 'palinew',
+    'thaiwn',
+    'thaict',
+    'romanct',
+    'palimc',
+    'thaims',
+    'thaivn',
+    'palinew',
   };
 
-  late final List<_CategoryInfo> _categories = _allCodes
-      .where((c) => !_excludedCodes.contains(c.code))
+  late final List<_CategoryInfo> _categories = _dbService
+      .getAvailableCodes()
+      .where((code) => !_excludedCodes.contains(code))
+      .map((code) {
+        final label = _dbService.labelForCode(code) ?? code;
+        return _CategoryInfo(code, label, Icons.book);
+      })
       .toList();
 
   List<EtipitakaItem> _allResults = [];
@@ -103,6 +93,30 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
       _error = null;
       _searchRunId++;
     });
+  }
+
+  String _buildTitle(int volume, int page) {
+    return 'เล่มที่ $volume หน้า $page';
+  }
+
+  String _buildExcerpt(String content, String query) {
+    String cleaned = content
+        .replaceAll('\t', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final idx = cleaned.toLowerCase().indexOf(query.toLowerCase());
+    if (idx == -1) {
+      return cleaned.length > 150 ? cleaned.substring(0, 150) : cleaned;
+    }
+
+    final start = idx > 60 ? idx - 60 : 0;
+    final end = (idx + query.length + 90) > cleaned.length
+        ? cleaned.length
+        : (idx + query.length + 90);
+    final prefix = start > 0 ? '...' : '';
+    final suffix = end < cleaned.length ? '...' : '';
+    return '$prefix${cleaned.substring(start, end)}$suffix';
   }
 
   List<TextSpan> _highlightText(String text, String query) {
@@ -149,35 +163,26 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
     });
 
     try {
-      final uri = Uri.parse('$_apiBase/api/etipitaka/search')
-          .replace(queryParameters: {
-        'code': _selectedCode,
-        'q': query,
-      });
-      final response = await http.get(uri);
-
-      if (response.statusCode != 200) {
+      if (!_dbService.isCodeAvailable(_selectedCode)) {
         if (mounted && runId == _searchRunId) {
           setState(() {
-            _error = 'Server error: ${response.statusCode}';
+            _error = 'เฉพาะฉบับหลวง (Thai Royal) เท่านั้นที่พร้อมใช้งานออฟไลน์';
             _isSearching = false;
           });
         }
         return;
       }
 
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final rawResults = json['results'] as List<dynamic>? ?? [];
+      final results = await _dbService.search(_selectedCode, query);
 
       if (mounted && runId == _searchRunId) {
-        final items = rawResults.map((r) {
-          final map = r as Map<String, dynamic>;
+        final items = results.map((r) {
           return EtipitakaItem(
-            volume: map['volume'] as int,
-            page: map['page'] as int,
-            items: map['items'] as String? ?? '',
-            title: map['title'] as String? ?? _buildTitle(map['volume'] as int, map['page'] as int),
-            excerpt: map['excerpt'] as String? ?? '',
+            volume: r.volume,
+            page: r.page,
+            items: r.items,
+            title: _buildTitle(r.volume, r.page),
+            excerpt: _buildExcerpt(r.content, query),
           );
         }).toList();
 
@@ -199,10 +204,6 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
         });
       }
     }
-  }
-
-  String _buildTitle(int volume, int page) {
-    return 'ເຫຼັ້ມທີ່ $volume ຫນ້າ $page';
   }
 
   @override
@@ -278,51 +279,57 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
                       _debounceTimer = Timer(
                         const Duration(milliseconds: 500),
                         () {
-                          if (_searchController.text.trim().isNotEmpty) _search();
+                          if (_searchController.text.trim().isNotEmpty) {
+                            _search();
+                          }
                         },
                       );
                     },
                     onSubmitted: (_) => _search(),
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[100] : Colors.grey[900],
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search E-Tipitaka...',
-                    hintStyle: TextStyle(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[100] : Colors.grey[900],
                     ),
-                    prefixIcon: Icon(
-                      Icons.search,
-                      color: isDark ? Colors.brown[200] : Colors.brown,
+                    decoration: InputDecoration(
+                      hintText: 'Search E-Tipitaka...',
+                      hintStyle: TextStyle(
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: isDark ? Colors.brown[200] : Colors.brown,
+                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(
+                                Icons.clear,
+                                color: isDark
+                                    ? Colors.brown[200]
+                                    : Colors.brown,
+                              ),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _allResults = [];
+                                  _query = '';
+                                  _error = null;
+                                });
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: isDark
+                          ? Colors.grey[700]
+                          : Colors.brown.shade50,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
                     ),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.clear,
-                              color: isDark ? Colors.brown[200] : Colors.brown,
-                            ),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _allResults = [];
-                                _query = '';
-                                _error = null;
-                              });
-                            },
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
               Expanded(
                 flex: 1,
                 child: DropdownButtonFormField<String>(
@@ -409,7 +416,9 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
                       _debounceTimer = Timer(
                         const Duration(milliseconds: 500),
                         () {
-                          if (_searchController.text.trim().isNotEmpty) _search();
+                          if (_searchController.text.trim().isNotEmpty) {
+                            _search();
+                          }
                         },
                       );
                     },
@@ -430,13 +439,17 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
                           ? IconButton(
                               icon: Icon(
                                 Icons.clear,
-                                color: isDark ? Colors.brown[200] : Colors.brown,
+                                color: isDark
+                                    ? Colors.brown[200]
+                                    : Colors.brown,
                               ),
                               onPressed: _clearSearch,
                             )
                           : null,
                       filled: true,
-                      fillColor: isDark ? Colors.grey[700] : Colors.brown.shade50,
+                      fillColor: isDark
+                          ? Colors.grey[700]
+                          : Colors.brown.shade50,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide.none,
