@@ -14,7 +14,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart' as yt;
 
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
-import '../../services/etipitaka_database_service.dart';
 import '../../themes/ThemeProvider.dart';
 import 'AnakameSutraContentPage.dart';
 import 'BookReadingScreenPage.dart';
@@ -39,6 +38,8 @@ class SearchPage extends StatefulWidget {
 }
 
 class _SearchPageState extends State<SearchPage> {
+  static const String _apiBase = 'https://buddhaword-web.hf.space';
+
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
@@ -435,241 +436,147 @@ class _SearchPageState extends State<SearchPage> {
 
     final List<Map<String, dynamic>> results = [];
 
-    if (_selectedSource == 'etipitaka' || _selectedSource == 'all') {
+    if (_selectedSource == 'all') {
       try {
-        final db = EtipitakaDatabaseService();
-        final dbResults = await db.search(_etipitakaCode, query);
-        for (final r in dbResults) {
-          final desc = r.content.replaceAll(RegExp(r'\s+'), ' ').trim();
-          final firstLine = desc.length > 120
-              ? '${desc.substring(0, 120)}...'
-              : desc;
-          results.add({
-            'source': 'etipitaka',
-            'sourceLabel': 'E-Tipitaka',
-            'title': 'เล่มที่ ${r.volume} · หน้า ${r.page}',
-            'subtitle': firstLine,
-            'payload': {
-              'code': _etipitakaCode,
-              'volume': r.volume,
-              'page': r.page,
-              'title': 'E-Tipitaka',
-            },
-          });
+        final uri = Uri.parse('$_apiBase/api/search')
+            .replace(queryParameters: {'q': query});
+        final response = await http.get(uri);
+        if (response.statusCode == 200) {
+          final json = jsonDecode(response.body) as List<dynamic>;
+          for (final r in json) {
+            final map = r as Map<String, dynamic>;
+            results.add({
+              'source': map['type'] as String? ?? 'unknown',
+              'sourceLabel': map['category'] as String? ?? '',
+              'title': map['title'] as String? ?? '',
+              'subtitle': map['detail'] as String? ?? '',
+              'payload': {
+                'url': map['url'] as String? ?? '',
+                'title': map['title'] as String? ?? '',
+              },
+            });
+          }
         }
       } catch (e) {
-        if (kDebugMode) print('E-Tipitaka search error: $e');
+        if (kDebugMode) print('Unified search error: $e');
       }
-    }
-
-    if (_selectedSource == 'anakame' || _selectedSource == 'all') {
-      try {
-        const anakameEndpoints = [
-          'http://anakame.com/page/1_Sutas/main/1_Sutta.htm',
-          'http://anakame.com/page/4_Suta_Set/Main/Main_Set01.htm',
-          'http://anakame.com/page/4_Short_Sutta.htm',
-          'http://anakame.com/page/7_person.htm',
-          'http://anakame.com/page/8_Misc.htm',
-        ];
-        final q = query.toLowerCase();
-        final seenUrls = <String>{};
-        final contentCandidates = <Map<String, dynamic>>[];
-        for (final endpoint in anakameEndpoints) {
-          try {
-            final res = await http.get(
-              Uri.parse(endpoint),
-              headers: {'User-Agent': 'Mozilla/5.0'},
-            );
-            if (res.statusCode != 200) continue;
-            final decoded = utf8.decode(res.bodyBytes);
-            final items = _parseAnakameListing(decoded, endpoint);
-            for (final item in items) {
-              final title = item['title'] as String;
-              final url = item['url'] as String;
-              if (!seenUrls.add(url)) continue;
-              if (title.toLowerCase().contains(q)) {
-                results.add({
-                  'source': 'anakame',
-                  'sourceLabel': 'Anakame',
-                  'title': title,
-                  'subtitle': '',
-                  'payload': {
-                    'contentUrl': url,
-                    'title': 'Anakame',
-                  },
-                });
-              } else if (contentCandidates.length < 10) {
-                contentCandidates.add(item);
-              }
+    } else {
+      if (_selectedSource == 'etipitaka') {
+        try {
+          final uri = Uri.parse('$_apiBase/api/etipitaka/search')
+              .replace(queryParameters: {
+            'code': _etipitakaCode,
+            'q': query,
+          });
+          final response = await http.get(uri);
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body) as Map<String, dynamic>;
+            final items = body['results'] as List<dynamic>? ?? [];
+            for (final r in items) {
+              final map = r as Map<String, dynamic>;
+              results.add({
+                'source': 'etipitaka',
+                'sourceLabel': 'E-Tipitaka',
+                'title': map['title'] as String? ?? '',
+                'subtitle': map['excerpt'] as String? ?? '',
+                'payload': {
+                  'code': _etipitakaCode,
+                  'volume': map['volume'] as int? ?? 0,
+                  'page': map['page'] as int? ?? 0,
+                  'title': 'E-Tipitaka',
+                },
+              });
             }
-          } catch (_) {}
+          }
+        } catch (e) {
+          if (kDebugMode) print('E-Tipitaka search error: $e');
         }
-        // Search content of non-title-matching items
-        for (final item in contentCandidates) {
-          try {
-            final contentUrl = item['url'] as String;
-            final contentRes = await http.get(
-              Uri.parse(contentUrl),
-              headers: {'User-Agent': 'Mozilla/5.0'},
-            );
-            if (contentRes.statusCode != 200) continue;
-            final text = utf8.decode(contentRes.bodyBytes)
-                .replaceAll(RegExp(r'<script[^>]*>.*?</script>', dotAll: true), '')
-                .replaceAll(RegExp(r'<style[^>]*>.*?</style>', dotAll: true), '')
-                .replaceAll(RegExp(r'<[^>]*>'), ' ')
-                .replaceAll(RegExp(r'\s+'), ' ')
-                .trim();
-            if (text.toLowerCase().contains(q)) {
+      }
+
+      if (_selectedSource == 'anakame') {
+        try {
+          final uri = Uri.parse('$_apiBase/api/anakame/list')
+              .replace(queryParameters: {'q': query, 'page': '1'});
+          final response = await http.get(uri);
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body) as Map<String, dynamic>;
+            final items = body['items'] as List<dynamic>? ?? [];
+            for (final r in items) {
+              final map = r as Map<String, dynamic>;
+              final href = map['href'] as String? ?? '';
+              final title = map['title'] as String? ?? '';
               results.add({
                 'source': 'anakame',
                 'sourceLabel': 'Anakame',
-                'title': item['title'],
-                'subtitle': text.length > 100
-                    ? '${text.substring(0, 100)}...'
-                    : text,
+                'title': title,
+                'subtitle': '',
                 'payload': {
-                  'contentUrl': contentUrl,
+                  'contentUrl': 'http://anakame.com/page/1_Sutas/$href',
                   'title': 'Anakame',
                 },
               });
             }
-          } catch (_) {}
-        }
-      } catch (e) {
-        if (kDebugMode) print('Anakame search error: $e');
-      }
-    }
-
-    if (_selectedSource == 'uttayarndham' || _selectedSource == 'all') {
-      try {
-        const baseUrl = 'https://uttayarndham.org';
-        final q = query.toLowerCase();
-        final seenItemUrls = <String>{};
-
-        // Fetch tags from keyword/tags paginated endpoint
-        final allTags = <Map<String, String>>[];
-        for (int page = 0; page <= 3; page++) {
-          try {
-            final tagUrl = '$baseUrl/keyword/tags${page > 0 ? '?page=$page' : ''}';
-            final tagRes = await http.get(Uri.parse(tagUrl));
-            if (tagRes.statusCode != 200) break;
-            final tagMatches = RegExp(
-              r'<a\s+href="(/taxonomy/term/\d+)"[^>]*>\s*([^<]+?)\s*</a>',
-              dotAll: true,
-            ).allMatches(tagRes.body);
-            int count = 0;
-            for (final m in tagMatches) {
-              allTags.add({'url': m.group(1)!.trim(), 'name': m.group(2)!.trim()});
-              count++;
-            }
-            if (count == 0) break;
-          } catch (_) {
-            break;
           }
+        } catch (e) {
+          if (kDebugMode) print('Anakame search error: $e');
         }
-
-        // Split into name-matching and non-matching tags
-        final nameMatching = allTags
-            .where((t) => t['name']!.toLowerCase().contains(q))
-            .take(8)
-            .toList();
-        final contentCandidates = allTags
-            .where((t) => !t['name']!.toLowerCase().contains(q))
-            .take(5)
-            .toList();
-
-        // Fetch items from name-matching tags
-        for (final tag in nameMatching) {
-          try {
-            final itemRes = await http.get(Uri.parse('$baseUrl${tag['url']}'));
-            if (itemRes.statusCode != 200) continue;
-            final itemMatches = RegExp(
-              r'<h4[^>]*>.*?<a\s+href="\s*([^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
-              dotAll: true,
-            ).allMatches(itemRes.body);
-            for (final m in itemMatches) {
-              final itemUrl = m.group(1)!.trim();
-              final itemTitle = m.group(2)!.trim();
-              final normalized = itemUrl.startsWith('http')
-                  ? Uri.parse(itemUrl).path
-                  : itemUrl;
-              if (itemTitle.isNotEmpty && seenItemUrls.add(normalized)) {
-                results.add({
-                  'source': 'uttayarndham',
-                  'sourceLabel': 'Uttayarndham',
-                  'title': itemTitle,
-                  'subtitle': tag['name'],
-                  'payload': {
-                    'contentUrl': normalized.startsWith('http')
-                        ? normalized
-                        : '$baseUrl$normalized',
-                    'title': 'Uttayarndham',
-                  },
-                });
-              }
-            }
-          } catch (_) {}
-        }
-
-        // Fetch items from non-matching tags and check item titles for query
-        for (final tag in contentCandidates) {
-          try {
-            final itemRes = await http.get(Uri.parse('$baseUrl${tag['url']}'));
-            if (itemRes.statusCode != 200) continue;
-            final itemMatches = RegExp(
-              r'<h4[^>]*>.*?<a\s+href="\s*([^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
-              dotAll: true,
-            ).allMatches(itemRes.body);
-            for (final m in itemMatches) {
-              final itemUrl = m.group(1)!.trim();
-              final itemTitle = m.group(2)!.trim();
-              final normalized = itemUrl.startsWith('http')
-                  ? Uri.parse(itemUrl).path
-                  : itemUrl;
-              if (itemTitle.isNotEmpty &&
-                  itemTitle.toLowerCase().contains(q) &&
-                  seenItemUrls.add(normalized)) {
-                results.add({
-                  'source': 'uttayarndham',
-                  'sourceLabel': 'Uttayarndham',
-                  'title': itemTitle,
-                  'subtitle': tag['name'],
-                  'payload': {
-                    'contentUrl': normalized.startsWith('http')
-                        ? normalized
-                        : '$baseUrl$normalized',
-                    'title': 'Uttayarndham',
-                  },
-                });
-              }
-            }
-          } catch (_) {}
-        }
-      } catch (e) {
-        if (kDebugMode) print('Uttayarndham search error: $e');
       }
-    }
 
-    if (_selectedSource == 'search_books' || _selectedSource == 'all') {
-      try {
-        final provider = context.read<SearchBooksProvider>();
-        final bookResults = await provider.searchAll(query);
-        for (final r in bookResults) {
-          results.add({
-            'source': 'search_books',
-            'sourceLabel': 'ໜັງສື',
-            'title': '${r.bookTitle} · ໜ້າ ${r.page}',
-            'subtitle': r.snippet,
-            'payload': {
-              'slug': r.slug,
-              'title': r.bookTitle,
-              'page': r.page,
-              'query': query,
-            },
-          });
+      if (_selectedSource == 'uttayarndham') {
+        try {
+          final uri = Uri.parse('$_apiBase/api/uttayarndham/list')
+              .replace(queryParameters: {'page': '0'});
+          final response = await http.get(uri);
+          if (response.statusCode == 200) {
+            final body = jsonDecode(response.body) as Map<String, dynamic>;
+            final items = body['items'] as List<dynamic>? ?? [];
+            final q = query.toLowerCase();
+            for (final r in items) {
+              final map = r as Map<String, dynamic>;
+              final title = map['title'] as String? ?? '';
+              final url = map['url'] as String? ?? '';
+              if (title.toLowerCase().contains(q)) {
+                results.add({
+                  'source': 'uttayarndham',
+                  'sourceLabel': 'Uttayarndham',
+                  'title': title,
+                  'subtitle': '',
+                  'payload': {
+                    'contentUrl': url.startsWith('/')
+                        ? 'https://uttayarndham.org$url'
+                        : url,
+                    'title': 'Uttayarndham',
+                  },
+                });
+              }
+            }
+          }
+        } catch (e) {
+          if (kDebugMode) print('Uttayarndham search error: $e');
         }
-      } catch (e) {
-        if (kDebugMode) print('Search books error: $e');
+      }
+
+      if (_selectedSource == 'search_books') {
+        try {
+          final provider = context.read<SearchBooksProvider>();
+          final bookResults = await provider.searchAll(query);
+          for (final r in bookResults) {
+            results.add({
+              'source': 'search_books',
+              'sourceLabel': 'ໜັງສື',
+              'title': '${r.bookTitle} · ໜ້າ ${r.page}',
+              'subtitle': r.snippet,
+              'payload': {
+                'slug': r.slug,
+                'title': r.bookTitle,
+                'page': r.page,
+                'query': query,
+              },
+            });
+          }
+        } catch (e) {
+          if (kDebugMode) print('Search books error: $e');
+        }
       }
     }
 
@@ -679,33 +586,6 @@ class _SearchPageState extends State<SearchPage> {
         _isSearching = false;
       });
     }
-  }
-
-  List<Map<String, dynamic>> _parseAnakameListing(String html, String baseUrl) {
-    final items = <Map<String, dynamic>>[];
-    final seen = <String>{};
-    for (final m in RegExp(
-      r'<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
-      dotAll: true,
-    ).allMatches(html)) {
-      final href = m.group(1)!.trim();
-      final inner = m.group(2)!.trim();
-      if (inner.contains('<img') || inner.isEmpty) continue;
-      if (href.startsWith('#') || href.startsWith('javascript')) continue;
-      if (href.contains('index.htm') || href.contains('favicon')) continue;
-      if (!href.contains('.htm') && !href.contains('.html')) continue;
-      final title = inner
-          .replaceAll(RegExp(r'<[^>]*>'), '')
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .trim();
-      if (title.isEmpty || title.length < 3) continue;
-      final absUrl = href.startsWith('http')
-          ? href
-          : Uri.parse(baseUrl).resolve(href).toString();
-      if (!seen.add(absUrl)) continue;
-      items.add({'title': title, 'url': absUrl});
-    }
-    return items;
   }
 
   Color _sourceColor(String source) {

@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:just_audio/just_audio.dart'
     show AudioPlayer, PlayerState, ProcessingState, LoopMode;
@@ -567,6 +568,11 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> fetchDataFromAPI(String searchTerm) async {
+    try {
+      await http.get(
+        Uri.parse('https://buddhaword-web.hf.space/api/sync-sutras'),
+      );
+    } catch (_) {}
     final sutraProvider = Provider.of<SutraProvider>(context, listen: false);
     await sutraProvider.fetchData(searchTerm: searchTerm);
     updateData(searchTerm, sutraProvider.data);

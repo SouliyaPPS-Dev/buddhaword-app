@@ -170,6 +170,8 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
     }
   }
 
+  static const String _apiBase = 'https://buddhaword-web.hf.space';
+
   Future<void> _searchContent(String query) async {
     if (query.length < 2 || _allItems.isEmpty) return;
     final q = query.toLowerCase();
@@ -187,18 +189,12 @@ class _AnakameSutraPageState extends State<AnakameSutraPage> {
     final matched = <String>{};
     for (final item in candidates) {
       try {
-        final response = await http.get(
-          Uri.parse(item.url),
-          headers: {'User-Agent': 'Mozilla/5.0'},
-        );
+        final uri = Uri.parse('$_apiBase/api/anakame/content')
+            .replace(queryParameters: {'url': item.url});
+        final response = await http.get(uri);
         if (response.statusCode == 200) {
-          String decoded = utf8.decode(response.bodyBytes);
-          final text = decoded
-              .replaceAll(RegExp(r'<script[^>]*>.*?</script>', dotAll: true), '')
-              .replaceAll(RegExp(r'<style[^>]*>.*?</style>', dotAll: true), '')
-              .replaceAll(RegExp(r'<[^>]*>'), ' ')
-              .replaceAll(RegExp(r'\s+'), ' ')
-              .trim();
+          final data = json.decode(response.body) as Map<String, dynamic>;
+          final text = (data['content'] as String?) ?? '';
           _contentCache[item.url] = text;
           if (text.toLowerCase().contains(q)) {
             matched.add(item.url);

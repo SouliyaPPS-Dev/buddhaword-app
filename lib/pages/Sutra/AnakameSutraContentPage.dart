@@ -73,7 +73,8 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
   StreamSubscription? _durationSubscription;
   StreamSubscription? _positionSubscription;
 
-  static const String _ttsBaseUrl = 'https://buddhaword-web.hf.space';
+  static const String _apiBase = 'https://buddhaword-web.hf.space';
+  static const String _ttsBaseUrl = _apiBase;
   static const int _ttsChunkSize = 1200;
   static const int _maxTtsChars = 50000;
 
@@ -186,22 +187,18 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       final href = m.group(1)!.trim();
       final inner = m.group(2)!.trim();
 
-      // Skip navigation links, image links, empty links
       if (inner.contains('<img') || inner.isEmpty) continue;
       if (href.startsWith('#') || href.startsWith('javascript')) continue;
       if (href.contains('index.htm') || href.contains('favicon')) continue;
 
-      // Only take links to .htm pages
       if (!href.contains('.htm') && !href.contains('.html')) continue;
 
-      // Clean the title text
       final title = inner
           .replaceAll(RegExp(r'<[^>]*>'), '')
           .replaceAll(RegExp(r'\s+'), ' ')
           .trim();
       if (title.isEmpty || title.length < 3) continue;
 
-      // Resolve URL
       final absUrl = _resolveUrl(href);
       if (seen.contains(absUrl)) continue;
       seen.add(absUrl);
@@ -225,16 +222,18 @@ class _AnakameSutraContentPageState extends State<AnakameSutraContentPage> {
       _error = null;
     });
     try {
-      final response = await http.get(Uri.parse(_currentUrl));
+      final uri = Uri.parse('$_apiBase/api/anakame/content')
+          .replace(queryParameters: {'url': _currentUrl});
+      final response = await http.get(uri);
       if (response.statusCode == 200) {
-        String decoded = utf8.decode(response.bodyBytes);
-        if (decoded.startsWith('\uFEFF')) decoded = decoded.substring(1);
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final content = data['content'] as String? ?? '';
         if (mounted) {
           setState(() {
-            _htmlContent = decoded;
+            _htmlContent = content;
             _isLoading = false;
           });
-          _contentCache[_currentIndex] = decoded;
+          _contentCache[_currentIndex] = content;
         }
       } else {
         if (mounted) {

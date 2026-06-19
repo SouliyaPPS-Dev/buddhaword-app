@@ -28,6 +28,8 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
   late final bool _isChecked = false;
   late final Color _checkColor = const Color.fromARGB(255, 175, 93, 78);
 
+  static const String _backendUrl = 'https://buddhaword-web.hf.space';
+
   List<List<dynamic>> _data = [];
 
   int _getSelectedIndex() {
@@ -484,9 +486,14 @@ class _NavigationDrawerState extends State<NavigationDrawer> {
   Future<void> fetchDataFromAPI() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
-    await Future.delayed(Duration(seconds: 1)); // Add delay here
+    await Future.delayed(Duration(seconds: 1));
 
     try {
+      // Trigger backend sync first
+      await http.get(
+        Uri.parse('$_backendUrl/api/sync-sutras'),
+      );
+
       final response = await http.get(
         Uri.parse(
           'https://sheets.googleapis.com/v4/spreadsheets/1mKtgmZ_Is4e6P3P5lvOwIplqx7VQ3amicgienGN9zwA/values/Sheet1!1:1000000?key=AIzaSyDFjIl-SEHUsgK0sjMm7x0awpf8tTEPQjs',

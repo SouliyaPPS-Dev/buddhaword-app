@@ -1,6 +1,7 @@
 // ignore_for_file: file_names, library_private_types_in_public_api, prefer_const_constructors, deprecated_member_use
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -33,6 +34,7 @@ class UttayarndhamPage extends StatefulWidget {
 
 class _UttayarndhamPageState extends State<UttayarndhamPage> {
   static const String _baseUrl = 'https://uttayarndham.org';
+  static const String _apiBase = 'https://buddhaword-web.hf.space';
 
   List<_Tag> _allTags = [];
   List<_Tag> _filteredTags = [];
@@ -202,17 +204,14 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
     final matched = <String>{};
     for (final tag in candidates) {
       try {
-        final response = await http.get(
-          Uri.parse('$_baseUrl${tag.url}'),
-          headers: {'User-Agent': 'Mozilla/5.0'},
-        );
+        final uri = Uri.parse('$_apiBase/api/uttayarndham/content')
+            .replace(queryParameters: {'url': tag.url});
+        final response = await http.get(uri);
         if (response.statusCode != 200) continue;
-        final items = _parseTagPageItems(response.body);
-        for (final item in items) {
-          if (item.title.toLowerCase().contains(q)) {
-            matched.add(tag.url);
-            break;
-          }
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final content = data['content'] as String? ?? '';
+        if (content.toLowerCase().contains(q)) {
+          matched.add(tag.url);
         }
       } catch (_) {}
     }
@@ -228,19 +227,25 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
 
   void _onTagSelected(_Tag tag) async {
     try {
-      final response = await http.get(Uri.parse('$_baseUrl${tag.url}'));
+      final uri = Uri.parse('$_apiBase/api/uttayarndham/content')
+          .replace(queryParameters: {'url': tag.url});
+      final response = await http.get(uri);
       if (response.statusCode == 200) {
-        final items = _parseTagPageItems(response.body);
-        if (items.isNotEmpty && mounted) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final content = data['content'] as String? ?? '';
+
+        // Try to parse individual items from content
+        final items = _parseTextItems(content, tag.url);
+        if (mounted) {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => UttayarndhamContentPage(
                 title: tag.name,
-                contentUrl: items.first.url.startsWith('http')
+                contentUrl: items.isNotEmpty
                     ? items.first.url
-                    : '$_baseUrl${items.first.url}',
-                items: items,
+                    : '$_baseUrl${tag.url}',
+                items: items.isNotEmpty ? items : null,
                 itemIndex: 0,
                 tagListing: true,
               ),
@@ -265,22 +270,15 @@ class _UttayarndhamPageState extends State<UttayarndhamPage> {
     }
   }
 
-  List<UttayarndhamItem> _parseTagPageItems(String html) {
-    final results = <UttayarndhamItem>[];
-    final seenUrls = <String>{};
-    final regex = RegExp(
-      r'<h4[^>]*>.*?<a\s+href="\s*([^"]+)"[^>]*>\s*([^<]+?)\s*</a>',
-      dotAll: true,
-    );
-    for (final m in regex.allMatches(html)) {
-      final href = m.group(1)!.trim();
-      final title = m.group(2)!.trim();
-      final normalized = href.startsWith('http') ? Uri.parse(href).path : href;
-      if (title.isNotEmpty && seenUrls.add(normalized)) {
-        results.add(UttayarndhamItem(title: title, url: normalized));
-      }
-    }
-    return results;
+  List<UttayarndhamItem> _parseTextItems(String text, String baseUrl) {
+    final lines = text.split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.length >= 10)
+        .toList();
+    return lines.map((l) => UttayarndhamItem(
+      title: l.length > 80 ? '${l.substring(0, 80)}...' : l,
+      url: baseUrl.startsWith('/') ? '$_baseUrl$baseUrl' : baseUrl,
+    )).toList();
   }
 
   List<TextSpan> _highlightText(String text, String query) {

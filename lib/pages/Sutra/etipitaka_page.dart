@@ -1,9 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
-import '../../services/etipitaka_database_service.dart';
 import '../../themes/ThemeProvider.dart';
 import 'etipitaka_content_page.dart';
 import '../../layouts/NavigationDrawer.dart' as custom_nav;
@@ -32,18 +33,35 @@ class EtipitakaSearchPage extends StatefulWidget {
 }
 
 class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
-  final EtipitakaDatabaseService _dbService = EtipitakaDatabaseService();
+  static const String _apiBase = 'https://buddhaword-web.hf.space';
+
+  static const _allCodes = [
+    _CategoryInfo('thai', 'ไทย (ฉบับหลวง)', Icons.menu_book),
+    _CategoryInfo('pali', 'บาลี (สยามรัฐ)', Icons.menu_book),
+    _CategoryInfo('thaimm', 'ไทย (มหามกุฏฯ)', Icons.language),
+    _CategoryInfo('thaimc', 'ไทย (มหาจุฬาฯ)', Icons.language),
+    _CategoryInfo('thaipb', 'พุทธวจน-หมวดธรรม', Icons.language),
+    _CategoryInfo('thaibt', 'ชุดจากพระโอษฐ์ 5 เล่ม', Icons.language),
+    _CategoryInfo('english', 'English', Icons.language),
+    _CategoryInfo('burma', 'Burma', Icons.language),
+    _CategoryInfo('myan', 'Myanmar', Icons.language),
+    _CategoryInfo('sri', 'Sri Lanka', Icons.language),
+    _CategoryInfo('siam', 'Siam', Icons.language),
+    _CategoryInfo('chinese', 'Chinese', Icons.language),
+    _CategoryInfo('tibetan', 'Tibetan', Icons.language),
+    _CategoryInfo('korean', 'Korean', Icons.language),
+    _CategoryInfo('vietnamese', 'Vietnamese', Icons.language),
+    _CategoryInfo('japanese', 'Japanese', Icons.language),
+    _CategoryInfo('roman', 'Roman', Icons.language),
+  ];
 
   static const _excludedCodes = {
     'thaiwn', 'thaict', 'romanct', 'palimc', 'thaims', 'thaivn', 'palinew',
   };
 
-  late final List<_CategoryInfo> _categories = _dbService.getAvailableCodes()
-      .where((code) => !_excludedCodes.contains(code))
-      .map((code) {
-        final label = _dbService.labelForCode(code) ?? code;
-        return _CategoryInfo(code, label, Icons.book);
-      }).toList();
+  late final List<_CategoryInfo> _categories = _allCodes
+      .where((c) => !_excludedCodes.contains(c.code))
+      .toList();
 
   List<EtipitakaItem> _allResults = [];
   bool _isSearching = false;
@@ -85,30 +103,6 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
       _error = null;
       _searchRunId++;
     });
-  }
-
-  String _buildTitle(int volume, int page) {
-    return 'เล่มที่ $volume หน้า $page';
-  }
-
-  String _buildExcerpt(String content, String query) {
-    String cleaned = content
-        .replaceAll('\t', ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-
-    final idx = cleaned.toLowerCase().indexOf(query.toLowerCase());
-    if (idx == -1) {
-      return cleaned.length > 150 ? cleaned.substring(0, 150) : cleaned;
-    }
-
-    final start = idx > 60 ? idx - 60 : 0;
-    final end = (idx + query.length + 90) > cleaned.length
-        ? cleaned.length
-        : (idx + query.length + 90);
-    final prefix = start > 0 ? '...' : '';
-    final suffix = end < cleaned.length ? '...' : '';
-    return '$prefix${cleaned.substring(start, end)}$suffix';
   }
 
   List<TextSpan> _highlightText(String text, String query) {
@@ -155,26 +149,35 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
     });
 
     try {
-      if (!_dbService.isCodeAvailable(_selectedCode)) {
+      final uri = Uri.parse('$_apiBase/api/etipitaka/search')
+          .replace(queryParameters: {
+        'code': _selectedCode,
+        'q': query,
+      });
+      final response = await http.get(uri);
+
+      if (response.statusCode != 200) {
         if (mounted && runId == _searchRunId) {
           setState(() {
-            _error = 'เฉพาะฉบับหลวง (Thai Royal) เท่านั้นที่พร้อมใช้งานออฟไลน์';
+            _error = 'Server error: ${response.statusCode}';
             _isSearching = false;
           });
         }
         return;
       }
 
-      final results = await _dbService.search(_selectedCode, query);
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final rawResults = json['results'] as List<dynamic>? ?? [];
 
       if (mounted && runId == _searchRunId) {
-        final items = results.map((r) {
+        final items = rawResults.map((r) {
+          final map = r as Map<String, dynamic>;
           return EtipitakaItem(
-            volume: r.volume,
-            page: r.page,
-            items: r.items,
-            title: _buildTitle(r.volume, r.page),
-            excerpt: _buildExcerpt(r.content, query),
+            volume: map['volume'] as int,
+            page: map['page'] as int,
+            items: map['items'] as String? ?? '',
+            title: map['title'] as String? ?? _buildTitle(map['volume'] as int, map['page'] as int),
+            excerpt: map['excerpt'] as String? ?? '',
           );
         }).toList();
 
@@ -196,6 +199,10 @@ class EtipitakaSearchPageState extends State<EtipitakaSearchPage> {
         });
       }
     }
+  }
+
+  String _buildTitle(int volume, int page) {
+    return 'ເຫຼັ້ມທີ່ $volume ຫນ້າ $page';
   }
 
   @override
