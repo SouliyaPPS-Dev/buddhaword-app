@@ -428,6 +428,140 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
+  Future<void> _searchEtipitaka(
+    String query,
+    List<Map<String, dynamic>> results,
+  ) async {
+    try {
+      final uri = Uri.parse(
+        '$_apiBase/api/etipitaka/search',
+      ).replace(queryParameters: {'code': _etipitakaCode, 'q': query});
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final items = body['results'] as List<dynamic>? ?? [];
+        for (final r in items) {
+          final map = r as Map<String, dynamic>;
+          results.add({
+            'source': 'etipitaka',
+            'sourceLabel': 'E-Tipitaka',
+            'title': map['title'] as String? ?? '',
+            'subtitle': map['excerpt'] as String? ?? '',
+            'payload': {
+              'code': _etipitakaCode,
+              'volume': map['volume'] as int? ?? 0,
+              'page': map['page'] as int? ?? 0,
+              'title': 'E-Tipitaka',
+            },
+          });
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) print('E-Tipitaka search error: $e');
+    }
+  }
+
+  Future<void> _searchAnakame(
+    String query,
+    List<Map<String, dynamic>> results,
+  ) async {
+    try {
+      final uri = Uri.parse(
+        '$_apiBase/api/anakame/list',
+      ).replace(queryParameters: {'q': query, 'page': '1'});
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final items = body['items'] as List<dynamic>? ?? [];
+        for (final r in items) {
+          final map = r as Map<String, dynamic>;
+          final href = map['href'] as String? ?? '';
+          final title = map['title'] as String? ?? '';
+          final anakameBase = Uri.parse(
+            'http://anakame.com/page/1_Sutas/main/1_Sutta.htm',
+          );
+          final contentUrl = anakameBase.resolve(href).toString();
+          results.add({
+            'source': 'anakame',
+            'sourceLabel': 'Anakame',
+            'title': title,
+            'subtitle': '',
+            'payload': {
+              'contentUrl': contentUrl,
+              'title': 'Anakame',
+            },
+          });
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) print('Anakame search error: $e');
+    }
+  }
+
+  Future<void> _searchUttayarndham(
+    String query,
+    List<Map<String, dynamic>> results,
+  ) async {
+    try {
+      final uri = Uri.parse(
+        '$_apiBase/api/uttayarndham/list',
+      ).replace(queryParameters: {'page': '0'});
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final items = body['items'] as List<dynamic>? ?? [];
+        final q = query.toLowerCase();
+        for (final r in items) {
+          final map = r as Map<String, dynamic>;
+          final title = map['title'] as String? ?? '';
+          final url = map['url'] as String? ?? '';
+          if (title.toLowerCase().contains(q)) {
+            results.add({
+              'source': 'uttayarndham',
+              'sourceLabel': 'Uttayarndham',
+              'title': title,
+              'subtitle': '',
+              'payload': {
+                'contentUrl': url.startsWith('/')
+                    ? 'https://uttayarndham.org$url'
+                    : url,
+                'title': 'Uttayarndham',
+              },
+            });
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) print('Uttayarndham search error: $e');
+    }
+  }
+
+  Future<void> _searchBooks(
+    String query,
+    List<Map<String, dynamic>> results,
+  ) async {
+    try {
+      final provider = context.read<SearchBooksProvider>();
+      final bookResults = await provider.searchAll(query);
+      for (final r in bookResults) {
+        results.add({
+          'source': 'search_books',
+          'sourceLabel': 'ໜັງສື',
+          'title': '${r.bookTitle} · ໜ້າ ${r.page}',
+          'subtitle': r.snippet,
+          'payload': {
+            'slug': r.slug,
+            'title': r.bookTitle,
+            'page': r.page,
+            'query': query,
+          },
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) print('Search books error: $e');
+    }
+  }
+
   Future<void> _searchExternalSources(String query) async {
     if (query.trim().isEmpty) {
       setState(() => _externalResults = []);
@@ -437,146 +571,27 @@ class _SearchPageState extends State<SearchPage> {
     final List<Map<String, dynamic>> results = [];
 
     if (_selectedSource == 'all') {
-      try {
-        final uri = Uri.parse('$_apiBase/api/search')
-            .replace(queryParameters: {'q': query});
-        final response = await http.get(uri);
-        if (response.statusCode == 200) {
-          final json = jsonDecode(response.body) as List<dynamic>;
-          for (final r in json) {
-            final map = r as Map<String, dynamic>;
-            results.add({
-              'source': map['type'] as String? ?? 'unknown',
-              'sourceLabel': map['category'] as String? ?? '',
-              'title': map['title'] as String? ?? '',
-              'subtitle': map['detail'] as String? ?? '',
-              'payload': {
-                'url': map['url'] as String? ?? '',
-                'title': map['title'] as String? ?? '',
-              },
-            });
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) print('Unified search error: $e');
-      }
+      await Future.wait([
+        _searchEtipitaka(query, results),
+        _searchAnakame(query, results),
+        _searchUttayarndham(query, results),
+        _searchBooks(query, results),
+      ]);
     } else {
       if (_selectedSource == 'etipitaka') {
-        try {
-          final uri = Uri.parse('$_apiBase/api/etipitaka/search')
-              .replace(queryParameters: {
-            'code': _etipitakaCode,
-            'q': query,
-          });
-          final response = await http.get(uri);
-          if (response.statusCode == 200) {
-            final body = jsonDecode(response.body) as Map<String, dynamic>;
-            final items = body['results'] as List<dynamic>? ?? [];
-            for (final r in items) {
-              final map = r as Map<String, dynamic>;
-              results.add({
-                'source': 'etipitaka',
-                'sourceLabel': 'E-Tipitaka',
-                'title': map['title'] as String? ?? '',
-                'subtitle': map['excerpt'] as String? ?? '',
-                'payload': {
-                  'code': _etipitakaCode,
-                  'volume': map['volume'] as int? ?? 0,
-                  'page': map['page'] as int? ?? 0,
-                  'title': 'E-Tipitaka',
-                },
-              });
-            }
-          }
-        } catch (e) {
-          if (kDebugMode) print('E-Tipitaka search error: $e');
-        }
+        await _searchEtipitaka(query, results);
       }
 
       if (_selectedSource == 'anakame') {
-        try {
-          final uri = Uri.parse('$_apiBase/api/anakame/list')
-              .replace(queryParameters: {'q': query, 'page': '1'});
-          final response = await http.get(uri);
-          if (response.statusCode == 200) {
-            final body = jsonDecode(response.body) as Map<String, dynamic>;
-            final items = body['items'] as List<dynamic>? ?? [];
-            for (final r in items) {
-              final map = r as Map<String, dynamic>;
-              final href = map['href'] as String? ?? '';
-              final title = map['title'] as String? ?? '';
-              results.add({
-                'source': 'anakame',
-                'sourceLabel': 'Anakame',
-                'title': title,
-                'subtitle': '',
-                'payload': {
-                  'contentUrl': 'http://anakame.com/page/1_Sutas/$href',
-                  'title': 'Anakame',
-                },
-              });
-            }
-          }
-        } catch (e) {
-          if (kDebugMode) print('Anakame search error: $e');
-        }
+        await _searchAnakame(query, results);
       }
 
       if (_selectedSource == 'uttayarndham') {
-        try {
-          final uri = Uri.parse('$_apiBase/api/uttayarndham/list')
-              .replace(queryParameters: {'page': '0'});
-          final response = await http.get(uri);
-          if (response.statusCode == 200) {
-            final body = jsonDecode(response.body) as Map<String, dynamic>;
-            final items = body['items'] as List<dynamic>? ?? [];
-            final q = query.toLowerCase();
-            for (final r in items) {
-              final map = r as Map<String, dynamic>;
-              final title = map['title'] as String? ?? '';
-              final url = map['url'] as String? ?? '';
-              if (title.toLowerCase().contains(q)) {
-                results.add({
-                  'source': 'uttayarndham',
-                  'sourceLabel': 'Uttayarndham',
-                  'title': title,
-                  'subtitle': '',
-                  'payload': {
-                    'contentUrl': url.startsWith('/')
-                        ? 'https://uttayarndham.org$url'
-                        : url,
-                    'title': 'Uttayarndham',
-                  },
-                });
-              }
-            }
-          }
-        } catch (e) {
-          if (kDebugMode) print('Uttayarndham search error: $e');
-        }
+        await _searchUttayarndham(query, results);
       }
 
       if (_selectedSource == 'search_books') {
-        try {
-          final provider = context.read<SearchBooksProvider>();
-          final bookResults = await provider.searchAll(query);
-          for (final r in bookResults) {
-            results.add({
-              'source': 'search_books',
-              'sourceLabel': 'ໜັງສື',
-              'title': '${r.bookTitle} · ໜ້າ ${r.page}',
-              'subtitle': r.snippet,
-              'payload': {
-                'slug': r.slug,
-                'title': r.bookTitle,
-                'page': r.page,
-                'query': query,
-              },
-            });
-          }
-        } catch (e) {
-          if (kDebugMode) print('Search books error: $e');
-        }
+        await _searchBooks(query, results);
       }
     }
 
@@ -616,7 +631,7 @@ class _SearchPageState extends State<SearchPage> {
   }) {
     final theme = Theme.of(context);
     final themeStyle = theme.textTheme.bodyLarge;
-    
+
     final effectiveStyle = (baseStyle ?? themeStyle)?.copyWith(
       fontSize: baseStyle?.fontSize ?? highlightFontSize,
       fontWeight: baseStyle?.fontWeight ?? FontWeight.bold,
@@ -658,10 +673,7 @@ class _SearchPageState extends State<SearchPage> {
 
     if (lastIndex < text.length) {
       spans.add(
-        TextSpan(
-          text: text.substring(lastIndex),
-          style: effectiveStyle,
-        ),
+        TextSpan(text: text.substring(lastIndex), style: effectiveStyle),
       );
     }
 
