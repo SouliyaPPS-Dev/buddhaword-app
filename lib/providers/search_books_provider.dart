@@ -380,10 +380,7 @@ class SearchBooksProvider with ChangeNotifier {
 
     if (await _hasInternet()) {
       try {
-        String url = '$_baseUrl/api/search-books/page-nav?book=$slug&n=$pageNum';
-        if (highlight != null && highlight.isNotEmpty) {
-          url += '&q=${Uri.encodeComponent(highlight)}';
-        }
+        final url = '$_baseUrl/api/search-books/page-nav?book=$slug&n=$pageNum';
         final response = await http.get(Uri.parse(url));
         if (response.statusCode == 200) {
           final data = json.decode(response.body) as Map<String, dynamic>;

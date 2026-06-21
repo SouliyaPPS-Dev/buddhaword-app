@@ -229,7 +229,6 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
     final result = await provider.fetchPage(
       widget.slug,
       pageNum,
-      highlight: widget.highlightQuery,
     );
     if (mounted) {
       setState(() {
@@ -237,11 +236,13 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
         if (result == null) {
           _pageErrors[pageNum] = true;
         }
-        _currentPage = pageNum;
         if (result != null && _totalPages == 0) {
           _totalPages = result.totalPages;
         }
       });
+      if (_totalPages > 0 && _pageController.hasClients) {
+        _pageController.jumpToPage(pageNum - 1);
+      }
     }
   }
 
