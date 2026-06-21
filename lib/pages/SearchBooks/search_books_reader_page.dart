@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../providers/search_books_provider.dart';
+import '../Sutra/SearchPage.dart';
 
 class _SearchHighlightController extends TextEditingController {
   final String query;
@@ -183,6 +184,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
           'slug': widget.slug,
           'title': widget.title,
           'totalPages': _totalPages,
+          'page': _currentPage,
         }),
       );
     } else {
@@ -311,7 +313,10 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.search, color: Colors.white),
-                  onPressed: () => _showSearchInBookDialog(context),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SearchPage()),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.text_increase, color: Colors.white),
@@ -1378,114 +1383,5 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
   void _decreaseFontSize() {
     setState(() => _fontSize = _fontSize > 2.0 ? _fontSize - 2.0 : _fontSize);
     _saveFontSize(_fontSize);
-  }
-
-  void _showSearchInBookDialog(BuildContext context) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('ຄົ້ນຫາໃນປຶ້ມ'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'ພິມຄຳທີ່ຕ້ອງການຄົ້ນຫາ...',
-            prefixIcon: Icon(Icons.search),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('ຍົກເລີກ'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              if (controller.text.trim().isNotEmpty) {
-                _showSearchResults(controller.text.trim());
-              }
-            },
-            child: const Text('ຄົ້ນຫາ'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSearchResults(String query) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    final provider = context.read<SearchBooksProvider>();
-    final results = await provider.searchInBook(widget.slug, query);
-
-    if (!mounted) return;
-    Navigator.pop(context);
-
-    if (results.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('ບໍ່ພົບຜົນການຄົ້ນຫາ')));
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        maxChildSize: 0.9,
-        minChildSize: 0.3,
-        expand: false,
-        builder: (_, scrollController) => Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'ພົບ ${results.length} ໜ້າ',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView.separated(
-                controller: scrollController,
-                itemCount: results.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (_, i) {
-                  final r = results[i];
-                  return ListTile(
-                    leading: CircleAvatar(child: Text('${r.page}')),
-                    title: Text(
-                      'ໜ້າທີ ${r.page} (${r.matches} ຄຳ)',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      r.snippet,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _goToPage(r.page);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

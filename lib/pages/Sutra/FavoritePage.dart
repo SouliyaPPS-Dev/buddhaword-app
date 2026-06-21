@@ -557,6 +557,10 @@ class _FavoritePageState extends State<FavoritePage> {
                         final itemData = jsonDecode(item);
                         final title = itemData['title'];
                         final audio = itemData['audio'];
+                        final details = itemData['details'] as String? ?? '';
+                        final snippet = details.length > 120
+                            ? '${details.substring(0, 120)}...'
+                            : details;
 
                         return Card(
                           elevation: 8,
@@ -654,194 +658,206 @@ class _FavoritePageState extends State<FavoritePage> {
                                   ],
                                 ),
                               ),
-                              subtitle: audio != null && audio != '/' && audio.toString().isNotEmpty
-                                  ? Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        if (_currentlyPlayingIndex == index)
-                                          Column(
-                                            children: [
-                                              if (audio.contains(
-                                                    'youtube.com',
-                                                  ) ||
-                                                  audio.contains('youtu.be'))
-                                                if (_ytController != null &&
-                                                    _isPlaying)
-                                                  Padding(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          vertical: 8.0,
-                                                        ),
-                                                    child: yt.YoutubePlayer(
-                                                      controller:
-                                                          _ytController!,
-                                                      aspectRatio: 16 / 9,
-                                                    ),
-                                                  )
-                                                else
-                                                  const SizedBox.shrink()
-                                              else
-                                                Column(
-                                                  children: [
-                                                    Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceBetween,
-                                                      children: [
-                                                        IconButton(
-                                                          icon: Icon(
-                                                            Icons.skip_previous,
-                                                          ),
-                                                          onPressed: () {
-                                                            final previousIndex =
-                                                                _findPreviousValidAudioIndex(
-                                                                  index,
-                                                                );
-                                                            if (previousIndex !=
-                                                                -1) {
-                                                              final previousAudio =
-                                                                  jsonDecode(
-                                                                        _filteredFavorites[previousIndex],
-                                                                      )['audio']
-                                                                      .toString();
-                                                              _playPauseAudio(
-                                                                previousIndex,
-                                                                previousAudio,
-                                                              );
-                                                            }
-                                                          },
-                                                        ),
-                                                        Expanded(
-                                                          child: Slider(
-                                                            min: 0.0,
-                                                            max: _duration
-                                                                .inMilliseconds
-                                                                .toDouble(),
-                                                            value: _position
-                                                                .inMilliseconds
-                                                                .toDouble()
-                                                                .clamp(
-                                                                  0.0,
-                                                                  _duration
-                                                                      .inMilliseconds
-                                                                      .toDouble(),
-                                                                ),
-                                                            onChanged: (value) {
-                                                              _seek(
-                                                                Duration(
-                                                                  milliseconds: value
-                                                                      .toInt()
-                                                                      .clamp(
-                                                                        0,
-                                                                        _duration
-                                                                            .inMilliseconds,
-                                                                      ),
-                                                                ),
-                                                              );
-                                                            },
-                                                          ),
-                                                        ),
-                                                        IconButton(
-                                                          icon: Icon(
-                                                            Icons.skip_next,
-                                                          ),
-                                                          onPressed: () {
-                                                            final nextIndex =
-                                                                _findNextValidAudioIndex(
-                                                                  index,
-                                                                );
-                                                            if (nextIndex !=
-                                                                -1) {
-                                                              final nextAudio =
-                                                                  jsonDecode(
-                                                                        _filteredFavorites[nextIndex],
-                                                                      )['audio']
-                                                                      .toString();
-                                                              _playPauseAudio(
-                                                                nextIndex,
-                                                                nextAudio,
-                                                              );
-                                                            }
-                                                          },
-                                                        ),
-                                                        SizedBox(width: 0),
-                                                        IconButton(
-                                                          icon: Icon(
-                                                            _isRepeating
-                                                                ? Icons
-                                                                      .repeat_one
-                                                                : Icons.repeat,
-                                                          ),
-                                                          color: Colors
-                                                              .brown, // Icon color
-                                                          iconSize: 25,
-                                                          onPressed: () {
-                                                            setState(() {
-                                                              _isRepeating =
-                                                                  !_isRepeating;
-                                                              _player.setLoopMode(
-                                                                _isRepeating
-                                                                    ? LoopMode
-                                                                          .one
-                                                                    : LoopMode
-                                                                          .off,
-                                                              );
-                                                            });
-                                                          },
-                                                        ),
-                                                        SizedBox(width: 0),
-                                                        IconButton(
-                                                          icon: Icon(
-                                                            Icons.download,
-                                                          ),
-                                                          color: Colors
-                                                              .brown, // Icon color
-                                                          iconSize: 25,
-                                                          onPressed: () {
-                                                            _downloadAudio(
-                                                              audio,
-                                                            );
-                                                          },
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 16.0,
-                                                          ),
-                                                      child: Row(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .spaceBetween,
-                                                        children: [
-                                                          Text(
-                                                            _formatDuration(
-                                                              _position,
-                                                            ),
-                                                          ),
-                                                          Text(
-                                                            _formatDuration(
-                                                              _duration -
-                                                                  _position,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                            ],
-                                          ),
-                                      ],
-                                    )
-                                  : null,
+                               subtitle: Column(
+                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                 children: [
+                                   if (snippet.isNotEmpty && (audio == null || audio == '/' || audio.toString().isEmpty))
+                                     Padding(
+                                       padding: const EdgeInsets.only(bottom: 4, top: 2),
+                                       child: Text(
+                                         snippet,
+                                         maxLines: 2,
+                                         overflow: TextOverflow.ellipsis,
+                                         style: TextStyle(
+                                           fontSize: 13,
+                                           color: Colors.grey[600],
+                                         ),
+                                       ),
+                                     ),
+                                   if (audio != null && audio != '/' && audio.toString().isNotEmpty)
+                                     if (_currentlyPlayingIndex == index)
+                                       Column(
+                                         children: [
+                                           if (audio.contains(
+                                                 'youtube.com',
+                                               ) ||
+                                               audio.contains('youtu.be'))
+                                             if (_ytController != null &&
+                                                 _isPlaying)
+                                               Padding(
+                                                 padding:
+                                                     const EdgeInsets.symmetric(
+                                                       vertical: 8.0,
+                                                     ),
+                                                 child: yt.YoutubePlayer(
+                                                   controller:
+                                                       _ytController!,
+                                                   aspectRatio: 16 / 9,
+                                                 ),
+                                               )
+                                             else
+                                               const SizedBox.shrink()
+                                           else
+                                             Column(
+                                               children: [
+                                                 Row(
+                                                   mainAxisAlignment:
+                                                       MainAxisAlignment
+                                                           .spaceBetween,
+                                                   children: [
+                                                     IconButton(
+                                                       icon: Icon(
+                                                         Icons.skip_previous,
+                                                       ),
+                                                       onPressed: () {
+                                                         final previousIndex =
+                                                             _findPreviousValidAudioIndex(
+                                                               index,
+                                                             );
+                                                         if (previousIndex !=
+                                                             -1) {
+                                                           final previousAudio =
+                                                               jsonDecode(
+                                                                     _filteredFavorites[previousIndex],
+                                                                   )['audio']
+                                                                   .toString();
+                                                           _playPauseAudio(
+                                                             previousIndex,
+                                                             previousAudio,
+                                                           );
+                                                         }
+                                                       },
+                                                     ),
+                                                     Expanded(
+                                                       child: Slider(
+                                                         min: 0.0,
+                                                         max: _duration
+                                                             .inMilliseconds
+                                                             .toDouble(),
+                                                         value: _position
+                                                             .inMilliseconds
+                                                             .toDouble()
+                                                             .clamp(
+                                                               0.0,
+                                                               _duration
+                                                                   .inMilliseconds
+                                                                   .toDouble(),
+                                                             ),
+                                                         onChanged: (value) {
+                                                           _seek(
+                                                             Duration(
+                                                               milliseconds: value
+                                                                   .toInt()
+                                                                   .clamp(
+                                                                     0,
+                                                                     _duration
+                                                                         .inMilliseconds,
+                                                                   ),
+                                                             ),
+                                                           );
+                                                         },
+                                                       ),
+                                                     ),
+                                                     IconButton(
+                                                       icon: Icon(
+                                                         Icons.skip_next,
+                                                       ),
+                                                       onPressed: () {
+                                                         final nextIndex =
+                                                             _findNextValidAudioIndex(
+                                                               index,
+                                                             );
+                                                         if (nextIndex !=
+                                                             -1) {
+                                                           final nextAudio =
+                                                               jsonDecode(
+                                                                     _filteredFavorites[nextIndex],
+                                                                   )['audio']
+                                                                   .toString();
+                                                           _playPauseAudio(
+                                                             nextIndex,
+                                                             nextAudio,
+                                                           );
+                                                         }
+                                                       },
+                                                     ),
+                                                     SizedBox(width: 0),
+                                                     IconButton(
+                                                       icon: Icon(
+                                                         _isRepeating
+                                                             ? Icons
+                                                                 .repeat_one
+                                                             : Icons.repeat,
+                                                       ),
+                                                       color: Colors
+                                                           .brown, // Icon color
+                                                       iconSize: 25,
+                                                       onPressed: () {
+                                                         setState(() {
+                                                           _isRepeating =
+                                                               !_isRepeating;
+                                                           _player.setLoopMode(
+                                                             _isRepeating
+                                                                 ? LoopMode
+                                                                     .one
+                                                                 : LoopMode
+                                                                     .off,
+                                                           );
+                                                         });
+                                                       },
+                                                     ),
+                                                     SizedBox(width: 0),
+                                                     IconButton(
+                                                       icon: Icon(
+                                                         Icons.download,
+                                                       ),
+                                                       color: Colors
+                                                           .brown, // Icon color
+                                                       iconSize: 25,
+                                                       onPressed: () {
+                                                         _downloadAudio(
+                                                           audio,
+                                                         );
+                                                       },
+                                                     ),
+                                                   ],
+                                                 ),
+                                                 Padding(
+                                                   padding:
+                                                       const EdgeInsets.symmetric(
+                                                         horizontal: 16.0,
+                                                       ),
+                                                   child: Row(
+                                                     mainAxisAlignment:
+                                                         MainAxisAlignment
+                                                             .spaceBetween,
+                                                     children: [
+                                                       Text(
+                                                         _formatDuration(
+                                                           _position,
+                                                         ),
+                                                       ),
+                                                       Text(
+                                                         _formatDuration(
+                                                           _duration -
+                                                               _position,
+                                                         ),
+                                                       ),
+                                                     ],
+                                                   ),
+                                                 ),
+                                               ],
+                                             ),
+                                         ],
+                                       ),
+                                 ],
+                               ),
                               onTap: () {
                                 final itemData = json.decode(
                                   _filteredFavorites[index],
                                 ) as Map<String, dynamic>;
                                 if (itemData['type'] == 'book') {
+                                  final page = itemData['page'] as int?;
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -849,6 +865,7 @@ class _FavoritePageState extends State<FavoritePage> {
                                         slug: itemData['slug'] ?? '',
                                         title: itemData['title'] ?? '',
                                         totalPages: itemData['totalPages'] ?? 0,
+                                        initialPage: page,
                                       ),
                                     ),
                                   );
