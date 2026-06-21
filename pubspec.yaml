@@ -2,7 +2,7 @@ name: lao_tipitaka
 description: "A new Flutter project."
 publish_to: "none"
 
-version: 77.0.0+77
+version: 78.0.0+78
 
 environment:
   sdk: ^3.8.1
