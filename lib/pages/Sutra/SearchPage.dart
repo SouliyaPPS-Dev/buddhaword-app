@@ -544,6 +544,7 @@ class _SearchPageState extends State<SearchPage> {
       final provider = context.read<SearchBooksProvider>();
       final bookResults = await provider.searchAll(query);
       for (final r in bookResults) {
+        final book = provider.books.where((b) => b.slug == r.slug).firstOrNull;
         results.add({
           'source': 'search_books',
           'sourceLabel': 'ໜັງສື',
@@ -554,6 +555,7 @@ class _SearchPageState extends State<SearchPage> {
             'title': r.bookTitle,
             'page': r.page,
             'query': query,
+            'totalPages': book?.totalPages ?? 0,
           },
         });
       }
@@ -1514,6 +1516,7 @@ class _SearchPageState extends State<SearchPage> {
             builder: (context) => SearchBooksReaderPage(
               slug: payload['slug'] ?? '',
               title: payload['title'] ?? '',
+              totalPages: payload['totalPages'] as int? ?? 0,
               highlightQuery: payload['query'],
               initialPage: payload['page'],
             ),

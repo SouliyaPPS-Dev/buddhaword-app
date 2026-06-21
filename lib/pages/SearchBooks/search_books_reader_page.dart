@@ -231,6 +231,7 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
       pageNum,
     );
     if (mounted) {
+      final wasUnknown = _totalPages == 0;
       setState(() {
         _pageCache[pageNum] = result;
         if (result == null) {
@@ -240,8 +241,17 @@ class _SearchBooksReaderPageState extends State<SearchBooksReaderPage> {
           _totalPages = result.totalPages;
         }
       });
-      if (_totalPages > 0 && _pageController.hasClients) {
-        _pageController.jumpToPage(pageNum - 1);
+      if (wasUnknown && result != null) {
+        final targetPage = pageNum;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted &&
+              _pageController.hasClients &&
+              _currentPage == targetPage &&
+              targetPage > 0 &&
+              targetPage - 1 < _totalPages) {
+            _pageController.jumpToPage(targetPage - 1);
+          }
+        });
       }
     }
   }

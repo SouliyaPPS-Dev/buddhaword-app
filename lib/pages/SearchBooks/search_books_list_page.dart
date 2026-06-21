@@ -300,18 +300,22 @@ class _SearchBooksListPageState extends State<SearchBooksListPage> {
             color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SearchBooksReaderPage(
-                    slug: r.slug,
-                    title: r.bookTitle,
-                    totalPages: 0,
-                    highlightQuery: localQ,
-                    initialPage: r.page,
+              onTap: () {
+                final provider = context.read<SearchBooksProvider>();
+                final book = provider.books.where((b) => b.slug == r.slug).firstOrNull;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SearchBooksReaderPage(
+                      slug: r.slug,
+                      title: r.bookTitle,
+                      totalPages: book?.totalPages ?? 0,
+                      highlightQuery: localQ,
+                      initialPage: r.page,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
